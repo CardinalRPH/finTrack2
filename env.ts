@@ -16,7 +16,7 @@ const envSchema = z.object({
     DATABASE_PORT: z.coerce.number(),
 
     AUTH_SECRET:z.string(),
-    AUTH_DISCORD_ID:z.string(),
+    AUTH_DISCORD_CLIENT_ID:z.string(),
     AUTH_DISCORD_SECRET:z.string()
 })
 

@@ -53,6 +53,7 @@ model User {
 
   // Relations to financial data
   wallets      Wallet[]
+  categories   Category[]
   transactions Transaction[]
   createdAt    DateTime      @default(now())
 }
@@ -94,28 +95,45 @@ enum EntryType {
   TRANSFER // Moving money between your own wallets (e.g., Bank -> QRIS)
 }
 
-model Transaction {
-  id       String @id @default(cuid())
-  userId   String
-  walletId String
+model Category {
+  id    String  @id @default(cuid())
+  name  String // e.g., "Food", "Salary", "Investment"
+  icon  String // e.g., "Utensils", "Wallet", "TrendingUp" (Lucide icon names)
+  color String? // Optional: hex code for UI branding (e.g., "#EF4444")
 
-  amount     Decimal  @db.Decimal(20, 2) // Rupiah value
-  gramAmount Decimal? @db.Decimal(10, 3) // Grams (if buying/selling gold)
+  userId String? // Optional: null for "System Default", or ID for "User Custom"
+  user   User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  transactions Transaction[]
+
+  @@unique([name, userId])
+  @@index([userId])
+}
+
+model Transaction {
+  id         String  @id @default(cuid())
+  userId     String
+  walletId   String
+  categoryId String? // Changed from String to Relation ID
+
+  amount     Decimal  @db.Decimal(20, 2)
+  gramAmount Decimal? @db.Decimal(10, 3)
 
   type        EntryType
-  category    String    @default("General") // Food, Salary, Investment, etc.
   description String?   @db.Text
 
-  // For Transfer logic (ID of the wallet receiving the money)
+  // For Transfer logic
   toWalletId String?
 
   date      DateTime @default(now())
   createdAt DateTime @default(now())
 
   // Relations
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  wallet Wallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  wallet   Wallet    @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  category Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([walletId])
+  @@index([categoryId])
 }
