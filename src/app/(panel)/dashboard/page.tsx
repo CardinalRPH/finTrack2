@@ -42,8 +42,8 @@ export default function Dashboard() {
                 {/* Main Trend Graph (Income vs Outcome) */}
                 <div className="lg:col-span-2 bg-slate-900/50 border border-slate-800 p-6 rounded-3xl">
                     <h3 className="text-lg font-bold mb-6">Cashflow Trend (30 Days)</h3>
-                    <div className="h-75 w-full">
-                        <ResponsiveContainer width="100%" height="100%">
+                    <div className="h-75 w-full flex-1">
+                        <ResponsiveContainer width="100%" height={300}>
                             <AreaChart data={trendData}>
                                 <defs>
                                     <linearGradient id="colorInc" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#10b981" stopOpacity={0.3} /><stop offset="95%" stopColor="#10b981" stopOpacity={0} /></linearGradient>
@@ -63,8 +63,8 @@ export default function Dashboard() {
                 {/* Gold Investment Trend */}
                 <div className="bg-slate-900/50 border border-slate-800 p-6 rounded-3xl">
                     <h3 className="text-lg font-bold mb-6 text-yellow-500">Gold Accumulation (gr)</h3>
-                    <div className="h-75 w-full">
-                        <ResponsiveContainer width="100%" height="100%">
+                    <div className="h-75 w-full flex-1">
+                        <ResponsiveContainer width="100%" height={300}>
                             <LineChart data={trendData}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
                                 <XAxis dataKey="date" hide />
@@ -106,8 +106,8 @@ export default function Dashboard() {
                 {/* Balance Trend (Net Worth) */}
                 <div className="bg-slate-900/50 border border-slate-800 p-6 rounded-3xl">
                     <h3 className="text-lg font-bold mb-6">Net Balance Trend</h3>
-                    <div className="h-62.5 w-full">
-                        <ResponsiveContainer width="100%" height="100%">
+                    <div className="h-62.5 w-full flex-1">
+                        <ResponsiveContainer width="100%" height={300}>
                             <BarChart data={trendData}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
                                 <XAxis dataKey="date" stroke="#64748b" fontSize={12} />
