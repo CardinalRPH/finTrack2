@@ -1,7 +1,7 @@
 import { initTRPC } from '@trpc/server'
-import { createContextType } from './context'
+import { Context } from './context'
 
-const t = initTRPC.context<createContextType>().create()
+const t = initTRPC.context<Context>().create()
 
 const isAuthed = t.middleware(({ ctx, next }) => {
     if (!ctx.user) {

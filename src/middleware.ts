@@ -13,7 +13,7 @@ export async function middleware(req: NextRequest) {
     }
 
     // 2. If user is NOT logged in and tries to access dashboard, send to landing
-    if (pathname.startsWith("/dashboard") && !token) {
+    if (pathname !== "/" && !token) {
         return NextResponse.redirect(new URL("/", req.url))
     }
 
@@ -21,5 +21,5 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-    matcher: ["/", "/dashboard/:path*"]
+    matcher: ["/((?!api|_next/static|_next/image|favicon.ico|images).*)"],
 }

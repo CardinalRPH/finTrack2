@@ -1,36 +1,24 @@
-import { cookies } from "next/headers"
-import { jwtVerify } from "@/utils/jwtDeps"
-import { jwtUserDto } from "@/dto/userDTO"
+import { authOptions } from "@/libs/auth"
 import { prisma } from "@/libs/prisma"
+import { getServerSession } from "next-auth"
 
 export const createContext = async () => {
-    const cookieStore = await cookies()
-    const token = cookieStore.get("token")?.value
+  const session = await getServerSession(authOptions)
 
-    let user = null
+  if (!session?.user?.email) {
+    return { user: null, prisma }
+  }
 
-    if (token) {
-        try {
-            const { userId } = jwtVerify(token) as jwtUserDto
-            const isExistUser = await prisma.user.findUnique({
-                where: {
-                    id: userId
-                },
-                omit: {
-                    password: true
-                }
-            })
-            if (!isExistUser) {
-                user = null
-            } else {
-                user = isExistUser
-            }
-        } catch {
-            user = null
-        }
-    }
+  const user = await prisma.user.findUnique({
+    where: {
+      email: session.user.email,
+    },
+  })
 
-    return { user }
+  return {
+    user,
+    prisma,
+  }
 }
 
-export type createContextType = typeof createContext
+export type Context = Awaited<ReturnType<typeof createContext>>
