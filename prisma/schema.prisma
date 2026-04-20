@@ -43,19 +43,19 @@ model Session {
 }
 
 model User {
-  id            String    @id @default(cuid())
-  name          String?
-  email         String?   @unique
-  emailVerified DateTime?
-  image         String?
-  accounts      Account[]
-  sessions      Session[]
+  id    String  @id @default(cuid())
+  name  String?
+  email String? @unique
+  image String?
 
   // Relations to financial data
+  accounts     Account[]
+  sessions     Session[]
   wallets      Wallet[]
   categories   Category[]
   transactions Transaction[]
   createdAt    DateTime      @default(now())
+  investments  Investment[]
 }
 
 // --- FINANCIAL MODELS ---
@@ -64,7 +64,6 @@ enum WalletType {
   CASH // Physical Wallet
   E_WALLET // QRIS, Gopay, OVO, Dana
   BANK // Savings, Debit, Credit Cards
-  GOLD // Physical Gold or Digital Gold assets
 }
 
 model Wallet {
@@ -75,13 +74,11 @@ model Wallet {
   // Use Decimal for money to avoid rounding issues (Rp millions can be large)
   balance Decimal @default(0) @db.Decimal(20, 2)
 
-  // Only used if type is GOLD (tracked in grams)
-  goldWeight Decimal? @default(0) @db.Decimal(10, 3)
-
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  transactions Transaction[]
+  transactions      Transaction[] @relation("WalletFrom")
+  receivedTransfers Transaction[] @relation("WalletTo")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -114,26 +111,55 @@ model Transaction {
   id         String  @id @default(cuid())
   userId     String
   walletId   String
-  categoryId String? // Changed from String to Relation ID
+  categoryId String?
 
-  amount     Decimal  @db.Decimal(20, 2)
-  gramAmount Decimal? @db.Decimal(10, 3)
+  type   EntryType
+  amount Decimal   @db.Decimal(20, 2)
 
-  type        EntryType
-  description String?   @db.Text
+  // Khusus untuk transaksi emas
+  isInvestment Boolean  @default(false)
+  gramAmount   Decimal? @db.Decimal(10, 3)
 
-  // For Transfer logic
+  description String?  @db.Text
+  date        DateTime @default(now())
+
+  // Logic Transfer: Jika type == TRANSFER, toWalletId harus diisi
   toWalletId String?
 
-  date      DateTime @default(now())
-  createdAt DateTime @default(now())
-
-  // Relations
   user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  wallet   Wallet    @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  wallet   Wallet    @relation("WalletFrom", fields: [walletId], references: [id], onDelete: Cascade)
+  toWallet Wallet?   @relation("WalletTo", fields: [toWalletId], references: [id], onDelete: SetNull)
   category Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
 
   @@index([userId])
   @@index([walletId])
-  @@index([categoryId])
+  @@index([date])
+}
+
+model Investment {
+  id          String  @id @default(cuid())
+  userId      String  @unique
+  assetName   String  @default("Gold")
+  totalGrams  Decimal @default(0) @db.Decimal(10, 3)
+  avgBuyPrice Decimal @default(0) @db.Decimal(20, 2) // Untuk hitung Profit/Loss
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+// Untuk data grafik di halaman Investment
+model GoldPriceHistory {
+  id        String   @id @default(cuid())
+  price     Decimal  @db.Decimal(20, 2) // Harga per gram
+  buyPrice  Decimal? @db.Decimal(20, 2) // Harga beli dari Antam/Pihak ke-3
+  sellPrice Decimal? @db.Decimal(20, 2) // Harga jual (buyback)
+  date      DateTime @default(now())
+
+  @@index([date])
 }

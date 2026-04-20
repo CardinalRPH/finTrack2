@@ -1,11 +1,11 @@
 import { TRPCError } from "@trpc/server";
 import { Context } from "../context";
-import { walletCreateSchemaType, walletUpdateSchemaType } from "../schemas/walletSchema";
+import { categoryCreateSchemaType, categoryUpdateSchemaType } from "../schemas/categorySchema";
 
-export const walletService = {
+export const categoryService = {
     getAllData: async ({ ctx }: { ctx: Context }) => {
         try {
-            const data = await ctx.prisma.wallet.findMany({
+            const data = await ctx.prisma.category.findMany({
                 where: {
                     userId: ctx.user!.id
                 },
@@ -15,14 +15,15 @@ export const walletService = {
                 select: {
                     id: true,
                     name: true,
-                    type: true,
-                    balance: true
+                    icon: true,
+                    color: true
                 }
             })
 
             return {
                 data
             }
+
         } catch (error) {
             if (error instanceof TRPCError) {
                 throw error
@@ -33,14 +34,14 @@ export const walletService = {
                 message: "Failed to create user",
             })
         }
-
     },
-    updateData: async ({ ctx, data }: { ctx: Context, data: walletUpdateSchemaType }) => {
+    updateData: async ({ ctx, data }: { ctx: Context, data: categoryUpdateSchemaType }) => {
         try {
-            const updated = await ctx.prisma.wallet.update({
+            const updated = await ctx.prisma.category.update({
                 data: {
-                    name: data.name,
-                    balance: data.balance
+                    color: data.color,
+                    icon: data.icon,
+                    name: data.name
                 },
                 where: {
                     id: data.id,
@@ -49,15 +50,15 @@ export const walletService = {
                 select: {
                     id: true,
                     name: true,
-                    type: true,
-                    balance: true,
-                    createdAt: true
+                    icon: true,
+                    color: true
                 }
             })
 
             return {
                 data: updated
             }
+
         } catch (error) {
             if (error instanceof TRPCError) {
                 throw error
@@ -68,22 +69,11 @@ export const walletService = {
                 message: "Failed to create user",
             })
         }
-    },
-    createData: async ({ ctx, data }: { ctx: Context, data: walletCreateSchemaType }) => {
-        try {
 
-            const existed = await ctx.prisma.wallet.findFirst({
-                where: {
-                    type: data.type
-                }
-            })
-            if (existed) {
-                throw new TRPCError({
-                    code: "FORBIDDEN",
-                    message: "This wallet is existed"
-                })
-            }
-            const createddat = await ctx.prisma.wallet.create({
+    },
+    createData: async ({ ctx, data }: { ctx: Context, data: categoryCreateSchemaType }) => {
+        try {
+            const createdData = await ctx.prisma.category.create({
                 data: {
                     ...data,
                     userId: ctx.user!.id
@@ -91,16 +81,14 @@ export const walletService = {
                 select: {
                     id: true,
                     name: true,
-                    type: true,
-                    balance: true,
-                    createdAt: true
+                    icon: true,
+                    color: true
                 }
             })
 
             return {
-                data: createddat
+                data: createdData
             }
-
         } catch (error) {
             if (error instanceof TRPCError) {
                 throw error
@@ -112,18 +100,18 @@ export const walletService = {
             })
         }
     },
-    deleteData: async ({ ctx, wallId }: { ctx: Context, wallId: string }) => {
+    deleteData: async ({ ctx, catId }: { ctx: Context, catId: string }) => {
         try {
-            await ctx.prisma.wallet.delete({
+            await ctx.prisma.category.delete({
                 where: {
-                    id: wallId,
+                    id: catId,
                     userId: ctx.user!.id
                 }
             })
+
             return {
                 message: "Data deleted"
             }
-
         } catch (error) {
             if (error instanceof TRPCError) {
                 throw error
