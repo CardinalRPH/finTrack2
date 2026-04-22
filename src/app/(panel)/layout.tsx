@@ -14,6 +14,8 @@ import {
 import { GiGoldBar } from "react-icons/gi"
 import { signOut, useSession } from 'next-auth/react'
 import { AnimatePresence, motion } from 'framer-motion'
+import Snackbar from './components/Snackbar'
+import { useSnackbar } from '@/stores/toastStore'
 
 const menuItems = [
     { name: 'Overview', href: '/dashboard', icon: HiOutlineHome },
@@ -39,6 +41,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
     const allItems = [...menuItems, ...statisticSubItems]
     const currentPage = allItems.find(item => item.href === pathname)?.name || "FinTrack"
+
+    const { hide, isOpen, message, type } = useSnackbar()
 
     useEffect(() => {
         setMobileOpen(false)
@@ -215,6 +219,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </div>
 
             {isMobileOpen && <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 lg:hidden" onClick={() => setMobileOpen(false)} />}
+            <Snackbar
+                isOpen={isOpen}
+                message={message}
+                onClose={() => hide()}
+                type={type}
+            />
         </div>
     )
 }

@@ -1,17 +1,25 @@
-import { motion, AnimatePresence } from "framer-motion"
-import { Category } from "../dto"
+import { motion } from "framer-motion"
 import { HiOutlineXMark } from "react-icons/hi2"
 import { IconRenderer } from "@/app/components/IconRenderer"
-import { useState } from "react"
+import { UseFormReturn } from "react-hook-form"
+import { categoryCreateSchemaType } from "@/server/schemas/categorySchema"
 
-function CategoryModal({ category, onClose }: { category: Category | null, onClose: () => void }) {
-    const [name, setName] = useState(category?.name || '')
-    const [icon, setIcon] = useState(category?.icon || 'HiOutlineTag')
-    const [color, setColor] = useState(category?.color || '#6366f1')
+function CategoryModal({ isPending, isEditing, onClose, reactForm, onSubmit }:
+    {
+        isPending: boolean
+        isEditing: boolean,
+        onClose: () => void,
+        onSubmit: (value: categoryCreateSchemaType) => void,
+        reactForm: UseFormReturn<categoryCreateSchemaType>
+    }
+) {
+    const { formState: { errors }, handleSubmit, register, setValue, watch } = reactForm
+    const selectedIcon = watch("icon")
+    const selectedColor = watch("color")
 
     const iconOptions = [
         'HiOutlineShoppingCart', 'HiOutlineHome', 'HiOutlineWallet',
-        'HiOutlineGlobeAmericas', 'GiGoldBar', 'HiOutlineAcademicCap',
+        'HiArrowsRightLeft', 'GiGoldBar', 'HiOutlineAcademicCap',
         'HiOutlineHeart', 'HiOutlineGift'
     ]
     return (
@@ -38,7 +46,7 @@ function CategoryModal({ category, onClose }: { category: Category | null, onClo
             >
                 <div className="flex justify-between items-center mb-6">
                     <h3 className="text-xl font-bold">
-                        {category ? 'Edit Category' : 'New Category'}
+                        {isEditing ? 'Edit Category' : 'New Category'}
                     </h3>
                     <button onClick={onClose} className="text-slate-500 hover:text-white transition-colors">
                         <HiOutlineXMark size={24} />
@@ -46,22 +54,22 @@ function CategoryModal({ category, onClose }: { category: Category | null, onClo
                 </div>
 
                 {/* ... (rest of your form content) ... */}
-                <div className="space-y-6">
+                <form className="space-y-6" onSubmit={handleSubmit(onSubmit)}>
                     {/* Preview */}
                     <div className="flex justify-center">
-                        <div className="p-6 rounded-3xl bg-slate-800 inline-block border-2 border-slate-700" style={{ color }}>
-                            <IconRenderer iconName={icon} className="w-10 h-10" />
+                        <div className="p-6 rounded-3xl bg-slate-800 inline-block border-2 border-slate-700" style={{ color: selectedColor }}>
+                            <IconRenderer iconName={selectedIcon} className="w-10 h-10" />
                         </div>
                     </div>
 
                     <div>
                         <label className="text-sm text-slate-500 mb-2 block">Category Name</label>
                         <input
-                            value={name}
-                            onChange={(e) => setName(e.target.value)}
+                            {...register("name")}
                             className="w-full bg-slate-950 border border-slate-800 rounded-2xl px-4 py-3 focus:ring-2 focus:ring-indigo-500 outline-none"
                             placeholder="e.g. Subscriptions"
                         />
+                        {errors.name && (<p className="text-red-500 px-4">{errors.name.message}</p>)}
                     </div>
 
                     <div>
@@ -69,30 +77,32 @@ function CategoryModal({ category, onClose }: { category: Category | null, onClo
                         <div className="grid grid-cols-4 gap-2 bg-slate-950 p-3 rounded-2xl border border-slate-800 max-h-40 overflow-y-auto">
                             {iconOptions.map(opt => (
                                 <button
+                                    type="button"
                                     key={opt}
-                                    onClick={() => setIcon(opt)}
-                                    className={`p-3 rounded-xl flex justify-center transition-all ${icon === opt ? 'bg-indigo-600 text-white' : 'hover:bg-slate-800 text-slate-500'}`}
+                                    onClick={() => setValue("icon", opt)}
+                                    className={`p-3 rounded-xl flex justify-center transition-all ${selectedIcon === opt ? 'bg-indigo-600 text-white' : 'hover:bg-slate-800 text-slate-500'}`}
                                 >
                                     <IconRenderer iconName={opt} className="w-5 h-5" />
                                 </button>
                             ))}
                         </div>
+                        {errors.icon && (<p className="text-red-500 px-4">{errors.icon.message}</p>)}
                     </div>
 
                     <div>
                         <label className="text-sm text-slate-500 mb-2 block">Theme Color</label>
                         <input
                             type="color"
-                            value={color}
-                            onChange={(e) => setColor(e.target.value)}
+                            {...register("color")}
                             className="w-full h-12 bg-transparent cursor-pointer rounded-xl"
                         />
+                        {errors.color && (<p className="text-red-500 px-4">{errors.color.message}</p>)}
                     </div>
 
-                    <button className="w-full bg-indigo-600 hover:bg-indigo-700 py-4 rounded-2xl font-bold transition-all shadow-lg shadow-indigo-500/20">
-                        {category ? 'Save Changes' : 'Create Category'}
+                    <button disabled={isPending} type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 py-4 rounded-2xl font-bold transition-all shadow-lg shadow-indigo-500/20">
+                        {isEditing ? 'Save Changes' : 'Create Category'}
                     </button>
-                </div>
+                </form>
             </motion.div>
         </div>
     )

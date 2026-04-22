@@ -7,20 +7,71 @@ export const recordService = {
         try {
             const {
                 type, amount, walletId, categoryId,
-                toWalletId, isInvestment, gramAmount, date, description
+                toWalletId, isInvestment, gramAmount, date, description, buyPrice, sellPrice
             } = data;
             const created = await ctx.prisma.$transaction(async (tx) => {
+                let catId: null | string = null
+                if (isInvestment && gramAmount) {
+                    const existCategory = await ctx.prisma.category.findFirst({
+                        where: {
+                            userId: ctx.user!.id,
+                            name: {
+                                startsWith: "CT.Invest"
+                            }
+                        }
+                    })
+                    if (!existCategory) {
+                        const newCat = await ctx.prisma.category.create({
+                            data: {
+                                name: "CT.Invest",
+                                userId: ctx.user!.id,
+                                icon: "GiGoldBar",
+                                color: "#f5db33"
+                            }
+                        })
+                        catId = newCat.id
+                    } else {
+                        catId = existCategory.id
+                    }
+                }
+
+                if (type === "TRANSFER" && toWalletId) {
+                    const existCategory = await ctx.prisma.category.findFirst({
+                        where: {
+                            userId: ctx.user!.id,
+                            name: {
+                                startsWith: "CT.Transfer"
+                            }
+                        }
+                    })
+                    if (!existCategory) {
+                        const newCat = await ctx.prisma.category.create({
+                            data: {
+                                name: "CT.Transfer",
+                                userId: ctx.user!.id,
+                                icon: "HiArrowsRightLeft",
+                                color: "#33e8f5"
+                            }
+                        })
+                        catId = newCat.id
+                    } else {
+                        catId = existCategory.id
+                    }
+                }
+
                 const transaction = await tx.transaction.create({
                     data: {
                         userId: ctx.user!.id,
                         walletId,
-                        categoryId,
+                        categoryId: categoryId || catId,
                         type,
                         amount,
                         description,
                         date,
                         isInvestment,
                         gramAmount,
+                        buyPrice,
+                        sellPrice,
                         toWalletId: type === "TRANSFER" ? toWalletId : null,
                     },
                 });
@@ -41,6 +92,12 @@ export const recordService = {
 
                 // 3. LOGIKA KHUSUS: TRANSFER
                 if (type === "TRANSFER" && toWalletId) {
+                    if (walletId === toWalletId) {
+                        throw new TRPCError({
+                            code: "BAD_REQUEST",
+                            message: "Cant transfer to the same wallet"
+                        })
+                    }
                     // Tambah saldo ke dompet tujuan
                     await tx.wallet.update({
                         where: { id: toWalletId },
@@ -78,7 +135,7 @@ export const recordService = {
             console.error(error)
             throw new TRPCError({
                 code: "INTERNAL_SERVER_ERROR",
-                message: "Failed to create user",
+                message: "Internal Server Error",
             })
         }
     },
@@ -108,6 +165,12 @@ export const recordService = {
 
                     // Jika dulu adalah transfer, kembalikan saldo di dompet tujuan
                     if (oldRecord.type === "TRANSFER" && oldRecord.toWalletId) {
+                        if (data.walletId === data.toWalletId) {
+                            throw new TRPCError({
+                                code: "BAD_REQUEST",
+                                message: "Cant transfer to the same wallet"
+                            })
+                        }
                         await tx.wallet.update({
                             where: { id: oldRecord.toWalletId },
                             data: { balance: { decrement: oldRecord.amount } },
@@ -135,6 +198,8 @@ export const recordService = {
                         date: data.date,
                         isInvestment: data.isInvestment,
                         gramAmount: data.gramAmount,
+                        buyPrice: data.buyPrice,
+                        sellPrice: data.sellPrice,
                         toWalletId: data.type === "TRANSFER" ? data.toWalletId : null,
                     },
                 });
@@ -180,7 +245,7 @@ export const recordService = {
             console.error(error)
             throw new TRPCError({
                 code: "INTERNAL_SERVER_ERROR",
-                message: "Failed to create user",
+                message: "Internal Server Error",
             })
         }
     },
@@ -247,13 +312,15 @@ export const recordService = {
             console.error(error)
             throw new TRPCError({
                 code: "INTERNAL_SERVER_ERROR",
-                message: "Failed to create user",
+                message: "Internal Server Error",
             })
         }
     },
     getAllData: async ({ ctx, input }: { ctx: Context, input: getAllRecordSchemaType }) => {
         try {
-            const { range, type, walletId } = input;
+            const { range, type, walletId, page } = input;
+            const limit = 20
+            const skip = (page - 1) * limit
 
             // 1. Logika Filter Tanggal
             let dateFilter = {};
@@ -275,31 +342,53 @@ export const recordService = {
                 };
             }
 
-            // 2. Query ke Database
-            const transactions = await ctx.prisma.transaction.findMany({
-                where: {
-                    userId: ctx.user!.id,
-                    ...dateFilter,
-                    ...(type && { type }), // Filter tipe jika ada
-                    ...(walletId && { walletId }), // Filter wallet jika ada
-                },
-                include: {
-                    category: {
-                        select: { name: true, icon: true, color: true }
+            const [data, total] = await Promise.all([
+                ctx.prisma.transaction.findMany({
+                    take: limit,
+                    skip,
+                    where: {
+                        userId: ctx.user!.id,
+                        ...dateFilter,
+                        ...(type && { type }),
+                        ...(walletId && { walletId })
                     },
-                    wallet: {
-                        select: { name: true, type: true }
+                    include: {
+                        category: {
+                            select: { name: true, icon: true, color: true }
+                        },
+                        wallet: {
+                            select: { name: true, type: true }
+                        },
+                        toWallet: {
+                            select: { name: true }
+                        }
                     },
-                    toWallet: {
-                        select: { name: true }
+                    orderBy: {
+                        createdAt: 'desc', // Terbaru di atas
+                    },
+                }),
+                ctx.prisma.transaction.count({
+                    where: {
+                        userId: ctx.user!.id
                     }
-                },
-                orderBy: {
-                    date: 'desc', // Terbaru di atas
-                },
-            });
+                })
+            ])
+            const totalPages = Math.ceil(total / limit)
 
-            return transactions;
+            // 2. Query ke Database
+
+            return {
+                data: data,
+                pagination: {
+                    page,
+                    limit,
+                    total,
+                    totalPages,
+                    hasNext: data.length === limit,
+                    nextPage: data.length === limit ? page + 1 : null,
+                    prevPage: page > 1 ? page - 1 : null
+                }
+            };
         } catch (error) {
 
         }

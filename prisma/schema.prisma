@@ -96,7 +96,7 @@ model Category {
   id    String  @id @default(cuid())
   name  String // e.g., "Food", "Salary", "Investment"
   icon  String // e.g., "Utensils", "Wallet", "TrendingUp" (Lucide icon names)
-  color String? // Optional: hex code for UI branding (e.g., "#EF4444")
+  color String // Optional: hex code for UI branding (e.g., "#EF4444")
 
   userId String? // Optional: null for "System Default", or ID for "User Custom"
   user   User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -119,6 +119,9 @@ model Transaction {
   // Khusus untuk transaksi emas
   isInvestment Boolean  @default(false)
   gramAmount   Decimal? @db.Decimal(10, 3)
+
+  buyPrice  Decimal? @db.Decimal(20, 2) // Harga saat beli (per gram)
+  sellPrice Decimal? @db.Decimal(20, 2) // Harga saat jual (per gram)
 
   description String?  @db.Text
   date        DateTime @default(now())
@@ -151,15 +154,4 @@ model Investment {
   updatedAt DateTime @updatedAt
 
   @@index([userId])
-}
-
-// Untuk data grafik di halaman Investment
-model GoldPriceHistory {
-  id        String   @id @default(cuid())
-  price     Decimal  @db.Decimal(20, 2) // Harga per gram
-  buyPrice  Decimal? @db.Decimal(20, 2) // Harga beli dari Antam/Pihak ke-3
-  sellPrice Decimal? @db.Decimal(20, 2) // Harga jual (buyback)
-  date      DateTime @default(now())
-
-  @@index([date])
 }

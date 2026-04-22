@@ -30,7 +30,7 @@ export const walletService = {
             console.error(error)
             throw new TRPCError({
                 code: "INTERNAL_SERVER_ERROR",
-                message: "Failed to create user",
+                message: "Internal Server Error",
             })
         }
 
@@ -65,7 +65,7 @@ export const walletService = {
             console.error(error)
             throw new TRPCError({
                 code: "INTERNAL_SERVER_ERROR",
-                message: "Failed to create user",
+                message: "Internal Server Error",
             })
         }
     },
@@ -108,7 +108,7 @@ export const walletService = {
             console.error(error)
             throw new TRPCError({
                 code: "INTERNAL_SERVER_ERROR",
-                message: "Failed to create user",
+                message: "Internal Server Error",
             })
         }
     },
@@ -131,7 +131,7 @@ export const walletService = {
             console.error(error)
             throw new TRPCError({
                 code: "INTERNAL_SERVER_ERROR",
-                message: "Failed to create user",
+                message: "Internal Server Error",
             })
         }
     },

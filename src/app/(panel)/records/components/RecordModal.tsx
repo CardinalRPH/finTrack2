@@ -1,143 +1,238 @@
-// src/components/modals/RecordModal.tsx
 "use client"
 
-import React, { useState, useEffect } from 'react'
 import { motion } from "framer-motion"
-import {
-    HiOutlineXMark, HiOutlineCalendarDays,
-    HiOutlineChatBubbleBottomCenterText, HiOutlineTag
-} from "react-icons/hi2"
+import { HiOutlineXMark, HiOutlineCalendarDays, HiOutlineChatBubbleBottomCenterText, HiOutlineTag, HiOutlineCreditCard, HiOutlineArrowsRightLeft } from "react-icons/hi2"
+import { UseFormReturn } from 'react-hook-form'
+import { CreateRecordFormInput, createRecordSchemaType } from '@/server/schemas/recordSchema'
+import { Wallet } from '../../wallets/dto'
+import { Category } from '../../categories/dto'
+import { useEffect } from "react"
 
-interface RecordModalProps {
-    isOpen: boolean
-    onClose: () => void
-    initialData?: any // Pass existing record for "Edit" mode
-    onSave: (data: any) => void
-}
+export default function RecordModal({ isPending, isEditing, onClose, reactForm, onSubmit, wallets, categories }: {
+    wallets: Wallet[]
+    categories: Category[]
+    isPending: boolean
+    isEditing: boolean,
+    onClose: () => void,
+    reactForm: UseFormReturn<CreateRecordFormInput>
+    onSubmit: (value: CreateRecordFormInput) => void,
+}) {
+    const { formState: { errors }, handleSubmit, register, setValue, watch } = reactForm
+    const type = watch("type")
+    const isInvestment = watch("isInvestment")
+    const gramAmount = watch("gramAmount")
+    const buyPrice = watch("buyPrice")
 
-export default function RecordModal({ isOpen, onClose, initialData, onSave }: RecordModalProps) {
-    const [type, setType] = useState<'EXPENSE' | 'INCOME'>(initialData?.type || 'EXPENSE')
-    const [amount, setAmount] = useState(initialData?.amount || '')
-    const [category, setCategory] = useState(initialData?.categoryId || '')
-    const [date, setDate] = useState(initialData?.date || new Date().toISOString().split('T')[0])
-    const [note, setNote] = useState(initialData?.note || '')
+    const walletId = watch("walletId")
 
-    // Update state if initialData changes (for Edit mode)
     useEffect(() => {
-        if (initialData) {
-            setType(initialData.type)
-            setAmount(initialData.amount)
-            setCategory(initialData.categoryId)
-            setDate(initialData.date)
-            setNote(initialData.note)
+        if (isInvestment && Boolean(gramAmount) && Boolean(buyPrice)) {
+            setValue("amount", Number(gramAmount) * Number(buyPrice))
         }
-    }, [initialData])
 
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault()
-        onSave({ type, amount: Number(amount), categoryId: category, date, note })
-        onClose()
-    }
+    }, [isInvestment, gramAmount, buyPrice])
+
+
 
     return (
         <div className="fixed inset-0 z-70 flex items-center justify-center p-4">
-            {/* Backdrop */}
-            <motion.div
-                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                onClick={onClose} className="absolute inset-0 bg-black/80 backdrop-blur-md"
-            />
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} className="absolute inset-0 bg-black/80 backdrop-blur-md" />
 
-            {/* Modal Content */}
             <motion.form
-                onSubmit={handleSubmit}
-                initial={{ scale: 0.9, opacity: 0, y: 20 }}
-                animate={{ scale: 1, opacity: 1, y: 0 }}
-                exit={{ scale: 0.9, opacity: 0, y: 20 }}
-                className="relative bg-slate-900 border border-slate-800 w-full max-w-lg rounded-[2.5rem] p-8 shadow-2xl"
+                onSubmit={handleSubmit(onSubmit)}
+                initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
+                className="relative bg-slate-900 border border-slate-800 w-full max-w-xl rounded-[2.5rem] p-8 max-h-[90vh] overflow-y-auto no-scrollbar"
             >
-                <div className="flex justify-between items-center mb-8">
-                    <h3 className="text-xl font-bold">{initialData ? 'Edit Record' : 'Add Record'}</h3>
+                <div className="flex justify-between items-center mb-6">
+                    <h3 className="text-xl font-bold">{isEditing ? 'Edit Record' : 'Add New Record'}</h3>
                     <button type="button" onClick={onClose} className="text-slate-500 hover:text-white"><HiOutlineXMark size={24} /></button>
                 </div>
 
-                <div className="space-y-6">
-                    {/* Amount Display with Dynamic Color */}
-                    <div className="text-center space-y-1">
-                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Nominal Amount</label>
-                        <div className="flex items-center justify-center gap-2">
-                            <span className={`text-2xl font-bold transition-colors ${type === 'INCOME' ? 'text-emerald-500' : 'text-rose-500'}`}>Rp</span>
-                            <input
-                                type="number"
-                                value={amount}
-                                onChange={(e) => setAmount(e.target.value)}
-                                className={`bg-transparent text-5xl font-black outline-none w-full text-center transition-colors placeholder:text-slate-800 ${type === 'INCOME' ? 'text-emerald-400' : 'text-rose-400'}`}
-                                placeholder="0"
-                                required
-                            />
-                        </div>
-                    </div>
-
-                    {/* Flexible Type Switcher */}
-                    <div className="flex p-1.5 bg-slate-950 rounded-2xl border border-slate-800">
-                        <button
-                            type="button"
-                            onClick={() => setType('EXPENSE')}
-                            className={`flex-1 py-3 rounded-xl font-bold transition-all ${type === 'EXPENSE' ? 'bg-rose-500 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
-                        >
-                            Outcome
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setType('INCOME')}
-                            className={`flex-1 py-3 rounded-xl font-bold transition-all ${type === 'INCOME' ? 'bg-emerald-500 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
-                        >
-                            Income
-                        </button>
-                    </div>
-
-                    {/* Grid Layout for Date & Category */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2"><HiOutlineCalendarDays /> Date</label>
-                            <input
-                                type="date"
-                                value={date}
-                                onChange={(e) => setDate(e.target.value)}
-                                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500"
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2"><HiOutlineTag /> Category</label>
-                            <select
-                                value={category}
-                                onChange={(e) => setCategory(e.target.value)}
-                                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500 appearance-none cursor-pointer"
-                                required
-                            >
-                                <option value="">Select...</option>
-                                <option value="food">Food & Drink</option>
-                                <option value="salary">Salary</option>
-                                <option value="investment">Investment (Gold)</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div className="space-y-2">
-                        <label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2"><HiOutlineChatBubbleBottomCenterText /> Note</label>
-                        <textarea
-                            value={note}
-                            onChange={(e) => setNote(e.target.value)}
-                            placeholder="Ex: Buy gold 1 gram"
-                            className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500 h-20 resize-none"
+                <div className="space-y-5">
+                    {/* Amount */}
+                    <div className="text-center">
+                        <input
+                            disabled={isInvestment}
+                            type="number"
+                            {...register("amount", { valueAsNumber: true })}
+                            className={`bg-transparent text-5xl font-black outline-none w-full text-center transition-colors ${type === 'INCOME' ? 'text-emerald-400' : type === 'TRANSFER' ? 'text-blue-400' : 'text-rose-400'}`}
+                            placeholder="0"
                         />
+                        {errors.amount && (<p className="text-red-500 px-4">{errors.amount.message}</p>)}
                     </div>
 
-                    <button
-                        type="submit"
-                        className={`w-full py-4 rounded-2xl font-bold text-lg transition-all shadow-lg active:scale-[0.98] ${type === 'INCOME' ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/10' : 'bg-rose-600 hover:bg-rose-700 shadow-rose-500/10'
-                            }`}
-                    >
-                        {initialData ? 'Update Record' : 'Save Record'}
+                    {/* Type Switcher */}
+                    <div className="p-1 text-center">
+                        <div className="flex bg-slate-950 rounded-2xl border border-slate-800">
+                            {['OUTCOME', 'INCOME', 'TRANSFER'].map((t) => (
+                                <button
+                                    key={t} type="button"
+                                    onClick={() => setValue("type", t as createRecordSchemaType["type"])}
+                                    className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all ${type === t ? 'bg-slate-800 text-white shadow-lg' : 'text-slate-500'}`}
+                                >
+                                    {t}
+                                </button>
+                            ))}
+                        </div>
+                        {errors.type && (<p className="text-red-500 px-4">{errors.type.message}</p>)}
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* Wallet From */}
+                        <div>
+                            <div className="space-y-2">
+                                <label className="text-xs font-bold text-slate-500 flex items-center gap-2"><HiOutlineCreditCard /> {type === 'TRANSFER' ? 'From Wallet' : 'Wallet'}</label>
+                                <select
+                                    {...register("walletId")}
+                                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 outline-none"
+                                >
+                                    <option value="">Select Wallet...</option>
+                                    {wallets.map((value, index) => (
+                                        <option key={`wall-${index}`} value={value.id}>{value.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            {errors.walletId && (<p className="text-red-500 px-4">{errors.walletId.message}</p>)}
+                        </div>
+
+                        {/* Wallet To (Transfer Only) */}
+                        {type === 'TRANSFER' && (
+                            <div>
+                                <div className="space-y-2">
+                                    <label className="text-xs font-bold text-slate-500 flex items-center gap-2"><HiOutlineArrowsRightLeft /> To Wallet</label>
+                                    <select
+                                        {...register("toWalletId")}
+                                        disabled={Boolean(!walletId)}
+                                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 outline-none"
+                                    >
+                                        <option value="">Select Target...</option>
+                                        {wallets.map((value, index) => (
+                                            <option key={`wallTo-${index}`} disabled={walletId === value.id} value={value.id}>{value.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                {errors.toWalletId && (<p className="text-red-500 px-4">{errors.toWalletId.message}</p>)}
+                            </div>
+                        )}
+
+                        {/* Category (Non-Transfer Only) */}
+                        {type !== 'TRANSFER' && (
+                            <div>
+                                <div className="space-y-2">
+                                    <label className="text-xs font-bold text-slate-500 flex items-center gap-2"><HiOutlineTag /> Category</label>
+                                    <select
+                                        {...register("categoryId")}
+                                        disabled={isInvestment}
+                                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 outline-none">
+                                        <option value="">Select Category...</option>
+                                        {categories.map((value, index) => (
+                                            <option key={`cat-${index}`} value={value.id}>{value.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                {errors.categoryId && (<p className="text-red-500 px-4">{errors.categoryId.message}</p>)}
+                            </div>
+                        )}
+                        <div>
+                            <div className="space-y-2">
+                                <label className="text-xs font-bold text-slate-500 flex items-center gap-2"><HiOutlineCalendarDays /> Date</label>
+                                <input type="date"
+                                    {...register("date")}
+                                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 outline-none scheme-dark" />
+                            </div>
+                            {errors.date && (<p className="text-red-500 px-4">{errors.date.message}</p>)}
+                        </div>
+                    </div>
+
+                    {/* Gold Investment Switch */}
+                    {type === 'OUTCOME' && (
+                        <div>
+                            <div className="flex items-center justify-between p-4 bg-slate-950 rounded-2xl border border-slate-800">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 bg-amber-500/10 text-amber-500 rounded-lg">✨</div>
+                                    <div>
+                                        <p className="text-sm font-bold">Gold Investment?</p>
+                                        <p className="text-[10px] text-slate-500">Record this as gold asset</p>
+                                    </div>
+                                </div>
+                                <input type="checkbox"
+                                    checked={isInvestment}
+                                    {...register("isInvestment")}
+                                    className="w-5 h-5 accent-indigo-500" />
+
+                            </div>
+                            {errors.isInvestment && (<p className="text-red-500 px-4">{errors.isInvestment.message}</p>)}
+                        </div>
+                    )}
+
+                    {isInvestment && (
+                        <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            className="space-y-4 pt-2 border-t border-slate-800/50 mt-2"
+                        >
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                <div>
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Weight (Gram)</label>
+                                        <input
+                                            type="number" step="0.001"
+                                            {...register("gramAmount", { valueAsNumber: true })}
+                                            className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 outline-none focus:border-amber-500/50"
+                                            placeholder="0.000"
+                                        />
+                                    </div>
+                                    {errors.gramAmount && (<p className="text-red-500 px-4">{errors.gramAmount.message}</p>)}
+                                </div>
+                                <div>
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Buy Price /g</label>
+                                        <input
+                                            type="number"
+                                            {...register("buyPrice", { valueAsNumber: true })}
+                                            className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 outline-none focus:border-emerald-500/50"
+                                            placeholder="Rp"
+                                        />
+                                    </div>
+                                    {errors.buyPrice && (<p className="text-red-500 px-4">{errors.buyPrice.message}</p>)}
+                                </div>
+                                <div>
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Sell Price /g</label>
+                                        <input
+                                            type="number"
+                                            {...register("sellPrice", { valueAsNumber: true })}
+                                            className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 outline-none focus:border-rose-500/50"
+                                            placeholder="Rp"
+                                        />
+                                    </div>
+                                    {errors.sellPrice && (<p className="text-red-500 px-4">{errors.sellPrice.message}</p>)}
+                                </div>
+                            </div>
+
+                            {/* Info kalkulasi sederhana */}
+                            {Boolean(gramAmount) && Boolean(buyPrice) && (
+                                <div className="p-3 bg-amber-500/5 rounded-xl border border-amber-500/10">
+                                    <p className="text-[10px] text-amber-500/80 uppercase font-medium">Estimated Total Value</p>
+                                    <p className="text-sm font-bold text-amber-200">
+                                        Rp {(Number(gramAmount) * Number(buyPrice)).toLocaleString('id-ID')}
+                                    </p>
+                                </div>
+                            )}
+                        </motion.div>
+                    )}
+                    <div>
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold text-slate-500 flex items-center gap-2"><HiOutlineChatBubbleBottomCenterText /> Description</label>
+                            <textarea
+                                {...register("description")}
+                                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 outline-none h-20 resize-none" placeholder="Note..." />
+                        </div>
+                        {errors.description && (<p className="text-red-500 px-4">{errors.description.message}</p>)}
+                    </div>
+
+                    <button disabled={isPending} type="submit" className={`w-full py-4 rounded-2xl font-bold text-white shadow-lg transition-all ${type === 'INCOME' ? 'bg-emerald-600' : type === 'TRANSFER' ? 'bg-blue-600' : 'bg-rose-600'}`}>
+                        {isEditing ? 'Update Record' : 'Save Record'}
                     </button>
                 </div>
             </motion.form>

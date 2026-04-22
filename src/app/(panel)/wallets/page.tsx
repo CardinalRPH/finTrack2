@@ -1,62 +1,138 @@
 "use client"
 
-import React, { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { HiOutlinePlus, HiOutlineCreditCard, HiOutlineBanknotes, HiOutlineDevicePhoneMobile, HiOutlinePencil, HiOutlineTrash } from "react-icons/hi2"
 import { AnimatePresence } from 'framer-motion'
 import WalletModal from './components/WalletModal'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { walletCreateSchema, walletCreateSchemaType } from '@/server/schemas/walletSchema'
+import { Wallet } from './dto'
+import { useSnackbar } from '@/stores/toastStore'
+import { useCreateWallet, useDeleteWallet, useGetWallet, useUpdateWallet } from '@/hooks/walletHook'
+import ConfirmModal from '../components/DialogModal'
+import ErrorModal from '../components/ErrorModal'
+import { formatToRupiah } from '@/utils/fomatCurrency'
 
-export interface Wallet {
-    id: string
-    name: string
-    type: 'E-WALLET' | 'CARD' | 'CASH'
-    balance: number
-    color: string
-}
-
-const initialWallets: Wallet[] = [
-    { id: '1', name: 'Digital Pay', type: 'E-WALLET', balance: 2500000, color: '#6366f1' },
-    { id: '2', name: 'Main Bank', type: 'CARD', balance: 15000000, color: '#ec4899' },
-]
 
 export default function WalletPage() {
-    const [wallets, setWallets] = useState<Wallet[]>(initialWallets)
     const [isModalOpen, setModalOpen] = useState(false)
-    const [editingWallet, setEditingWallet] = useState<Wallet | null>(null)
+    const [isErrMdOpen, setErrMdOpen] = useState(false)
+    const [selectedWall, setSelectedWall] = useState<Wallet | null>(null)
+    const [errMsg, setErrMsg] = useState<string | null>(null)
+    const [isConfirmOpen, setIsConfirmOpen] = useState(false)
+    const [targetId, setTargetId] = useState<string | null>(null)
+
+    const { show: showToast } = useSnackbar()
+
+    const { data, isLoading, error: getErrMsg, isError: getErr } = useGetWallet()
+    const { mutate: createWall, error: createErrMsg, isPending: createPend, isError: createErr, isSuccess: createScss } = useCreateWallet()
+    const { mutate: updateWall, error: updateErrMsg, isPending: updatePend, isError: updateErr, isSuccess: updateScss } = useUpdateWallet()
+    const { mutate: deleteWall, error: deleteErrMsg, isPending: deletePend, isError: deleteErr, isSuccess: deleteScss } = useDeleteWallet()
+
+    const reactForm = useForm({
+        resolver: zodResolver(walletCreateSchema)
+    })
+    const { reset, clearErrors } = reactForm
 
     // Identify which types are already taken
-    const takenTypes = wallets.map(w => w.type)
+    const takenTypes = data?.data.map(w => w.type)
 
     const handleOpenAdd = () => {
-        setEditingWallet(null)
+        setSelectedWall(null)
         setModalOpen(true)
     }
 
-    const handleDelete = (id: string) => {
-        if (confirm("Delete this wallet? All linked records will lose their wallet reference.")) {
-            setWallets(wallets.filter(w => w.id !== id))
+    const onSubmit = (value: walletCreateSchemaType) => {
+        if (!selectedWall) {
+            createWall(value)
+        } else {
+            updateWall({ ...value, id: selectedWall.id })
         }
     }
+
+    const onDelete = () => {
+        deleteWall({ id: targetId! })
+    }
+
+    const handleDelete = (id: string) => {
+        setTargetId(id)
+        setIsConfirmOpen(true)
+    }
+
+    const openModal = (wallet: Wallet | null = null) => {
+        reset({ ...wallet, balance: Number(wallet?.balance) })
+        setSelectedWall(wallet)
+        setModalOpen(true)
+    }
+
+    const onModalClose = () => {
+        clearErrors()
+        setModalOpen(false)
+
+    }
+
+    useEffect(() => {
+        if (getErr) {
+            setErrMdOpen(getErr)
+            setErrMsg(getErrMsg.message)
+        }
+        if (createErr) {
+            setErrMdOpen(createErr)
+            setErrMsg(createErrMsg.message)
+        }
+        if (updateErr) {
+            setErrMdOpen(updateErr)
+            setErrMsg(updateErrMsg.message)
+        }
+        if (deleteErr) {
+            setErrMdOpen(deleteErr)
+            setErrMsg(deleteErrMsg.message)
+        }
+
+    }, [getErr, createErr, updateErr, deleteErr])
+
+    useEffect(() => {
+        if (createScss) {
+            setSelectedWall(null)
+            setModalOpen(false)
+            showToast("Wallet Created", "success")
+            reset()
+        }
+        if (updateScss) {
+            setSelectedWall(null)
+            setModalOpen(false)
+            showToast("Wallet Updated", "success")
+            reset()
+        }
+        if (deleteScss) {
+            setIsConfirmOpen(false)
+            setTargetId(null)
+            showToast("Wallet Deleted", "success")
+        }
+    }, [createScss, updateScss, deleteScss])
+
 
     return (
         <div className="space-y-8 pb-20">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {wallets.map((wallet) => (
+                {data?.data.map((wallet) => (
                     <div
                         key={wallet.id}
                         className="relative group bg-slate-900 border border-slate-800 p-6 rounded-4xl overflow-hidden transition-all hover:border-slate-700 shadow-xl"
                     >
                         {/* Background Glow Deco */}
-                        <div className="absolute -right-10 -top-10 w-32 h-32 blur-[80px] opacity-20" style={{ backgroundColor: wallet.color }} />
+                        <div className="absolute -right-10 -top-10 w-32 h-32 blur-[80px] opacity-20" />
 
                         <div className="flex justify-between items-start mb-8">
-                            <div className="p-4 rounded-2xl bg-slate-800 text-white shadow-inner" style={{ color: wallet.color }}>
-                                {wallet.type === 'CARD' && <HiOutlineCreditCard size={28} />}
+                            <div className="p-4 rounded-2xl bg-slate-800 text-white shadow-inner">
+                                {wallet.type === 'BANK' && <HiOutlineCreditCard size={28} />}
                                 {wallet.type === 'CASH' && <HiOutlineBanknotes size={28} />}
-                                {wallet.type === 'E-WALLET' && <HiOutlineDevicePhoneMobile size={28} />}
+                                {wallet.type === 'E_WALLET' && <HiOutlineDevicePhoneMobile size={28} />}
                             </div>
 
                             <div className="flex gap-2">
-                                <button onClick={() => { setEditingWallet(wallet); setModalOpen(true); }} className="p-2 text-slate-500 hover:text-white transition-colors">
+                                <button onClick={() => { openModal(wallet); }} className="p-2 text-slate-500 hover:text-white transition-colors">
                                     <HiOutlinePencil size={18} />
                                 </button>
                                 <button onClick={() => handleDelete(wallet.id)} className="p-2 text-slate-500 hover:text-rose-500 transition-colors">
@@ -68,13 +144,13 @@ export default function WalletPage() {
                         <div>
                             <p className="text-slate-500 text-sm font-medium uppercase tracking-widest mb-1">{wallet.name}</p>
                             <h3 className="text-3xl font-black text-white">
-                                {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(wallet.balance)}
+                                {formatToRupiah(wallet.balance)}
                             </h3>
                         </div>
                     </div>
                 ))}
             </div>
-            {takenTypes.length < 3 && (
+            {takenTypes && takenTypes.length < 3 && !isLoading && (
                 <button
                     onClick={handleOpenAdd}
                     className="fixed bottom-8 right-8 z-50 w-16 h-16 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl shadow-2xl shadow-indigo-500/40 flex items-center justify-center transition-all hover:scale-110 active:scale-95 group"
@@ -90,14 +166,23 @@ export default function WalletPage() {
             <AnimatePresence>
                 {isModalOpen && (
                     <WalletModal
-                        isOpen={isModalOpen}
-                        onClose={() => setModalOpen(false)}
-                        initialData={editingWallet}
-                        takenTypes={takenTypes}
-                        onSave={(data) => console.log("Saving Wallet:", data)}
+                        isPending={createPend || updatePend}
+                        onClose={onModalClose}
+                        initData={data!.data}
+                        isEditing={Boolean(selectedWall)}
+                        reactForm={reactForm}
+                        onSubmit={onSubmit}
                     />
                 )}
             </AnimatePresence>
+            <ConfirmModal
+                isPending={deletePend}
+                isOpen={isConfirmOpen}
+                message='This action cannot be undone. All records linked to this wallet will lose their reference.'
+                onClose={() => setIsConfirmOpen(false)}
+                onConfirm={onDelete}
+            />
+            <ErrorModal isOpen={isErrMdOpen} onClose={() => setErrMdOpen(false)} message={errMsg || ""} />
         </div>
     )
 }

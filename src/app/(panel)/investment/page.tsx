@@ -15,6 +15,7 @@ import { HiOutlineTrendingDown, HiOutlineTrendingUp } from "react-icons/hi";
 import { GiGoldBar } from "react-icons/gi"
 import { AnimatePresence } from 'framer-motion'
 import GoldRecordModal from './components/GoldRecordModal'
+import { formatToRupiah } from '@/utils/fomatCurrency';
 
 // Mock Data for the Price Chart
 const goldPriceHistory = [
@@ -62,7 +63,7 @@ export default function InvestmentPage() {
                         <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mb-2">Total Gold Balance</p>
                         <h3 className="text-3xl font-black text-white mb-1">{totalGrams} <span className="text-sm font-medium text-slate-500">gram</span></h3>
                         <p className="text-xl font-bold text-indigo-400">
-                            {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(currentValuation)}
+                            {formatToRupiah(currentValuation)}
                         </p>
                     </div>
 

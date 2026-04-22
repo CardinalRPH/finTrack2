@@ -1,81 +1,190 @@
 "use client"
 
 import { IconRenderer } from '@/app/components/IconRenderer'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
     HiOutlineAdjustmentsHorizontal,
-    HiOutlineArrowUpCircle, HiOutlineArrowDownCircle,
-    HiOutlinePencil,
-    HiOutlineTrash,
-    HiOutlinePlus
+
+    HiOutlinePencil, HiOutlineTrash, HiOutlinePlus, HiArrowsRightLeft,
+    HiChevronRight,
+    HiChevronLeft
 } from "react-icons/hi2"
 import { HiOutlineSearch } from "react-icons/hi";
 import { AnimatePresence } from 'framer-motion';
 import RecordModal from './components/RecordModal';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { CreateRecordFormInput, createRecordSchema, createRecordSchemaType, getAllRecordSchemaType } from '@/server/schemas/recordSchema';
+import { useSnackbar } from '@/stores/toastStore';
+import { useCreateRecord, useDeleteRecord, useGetRecord, useUpdateRecord } from '@/hooks/recordHook';
+import ErrorModal from '../components/ErrorModal';
+import ConfirmModal from '../components/DialogModal';
+import { useGetWallet } from '@/hooks/walletHook';
+import { useGetCategory } from '@/hooks/categoryHook';
+import getVisiblePages from '@/utils/getVisiblePage';
 
-// Types for our records
-interface Transaction {
-    id: string
-    type: 'INCOME' | 'EXPENSE'
-    amount: number
-    category: {
-        name: string
-        icon: string
-        color: string
-    }
-    date: string
-    note: string
-}
 
-const mockTransactions: Transaction[] = [
-    { id: '1', type: 'EXPENSE', amount: 45000, category: { name: 'Food', icon: 'HiOutlineShoppingCart', color: '#fb7185' }, date: '2026-04-19', note: 'Dinner at Mall' },
-    { id: '2', type: 'INCOME', amount: 5000000, category: { name: 'Salary', icon: 'HiOutlineWallet', color: '#34d399' }, date: '2026-04-18', note: 'Monthly Pay' },
-    { id: '3', type: 'EXPENSE', amount: 1200000, category: { name: 'Investment', icon: 'GiGoldBar', color: '#fbbf24' }, date: '2026-04-15', note: 'Buy 1g Gold' },
-]
 
 export default function RecordsPage() {
-    const [timeRange, setTimeRange] = useState('7D')
+    const [timeRange, setTimeRange] = useState<getAllRecordSchemaType["range"]>('7D')
     const ranges = ['7D', '30D', '12W', '6M', '1Y']
-    const [records, setRecords] = useState(mockTransactions)
+
     const [isModalOpen, setModalOpen] = useState(false)
-    const [selectedRecord, setSelectedRecord] = useState<any>(null)
-    const [editingRecord, setEditingRecord] = useState<Transaction | null>(null)
+    const [selectedRecord, setSelectedRecord] = useState<Transaction["data"] | null>(null)
+    const [isErrMdOpen, setErrMdOpen] = useState(false)
+    const [errMsg, setErrMsg] = useState<string | null>(null)
+    const [isConfirmOpen, setIsConfirmOpen] = useState(false)
+    const [targetId, setTargetId] = useState<string | null>(null)
+
+    const [page, setPage] = useState(1)
+
+    const { data, isLoading, error: getErrMsg, isError: getErr } = useGetRecord({
+        filter: {
+            range: timeRange,
+            page
+        }
+    })
+    const { mutate: createRec, error: createErrMsg, isPending: createPend, isError: createErr, isSuccess: createScss } = useCreateRecord()
+    const { mutate: updateRec, error: updateErrMsg, isPending: updatePend, isError: updateErr, isSuccess: updateScss } = useUpdateRecord()
+    const { mutate: deleteRec, error: deleteErrMsg, isPending: deletePend, isError: deleteErr, isSuccess: deleteScss } = useDeleteRecord()
+    const { data: wallData, error: wallErrMsg, isError: wallErr } = useGetWallet()
+    const { data: catData, error: catErrMsg, isError: catErr } = useGetCategory()
+
+    const reactForm = useForm<CreateRecordFormInput>({
+        resolver: zodResolver(createRecordSchema),
+        defaultValues: {
+            date: new Date(),
+            isInvestment: false,
+            type: "OUTCOME"
+        }
+    })
+    const { reset, clearErrors } = reactForm
+
+    // Pagination State
+    const itemsPerPage = 20
+    // Logika Kalkulasi Data
+    const totalPages = data?.pagination.totalPages ?? 1
+
+    const visiblePages = getVisiblePages(page, totalPages)
+
+    const { show: showToast } = useSnackbar()
 
     const handleOpenAdd = () => {
-        setSelectedRecord(null) // Reset for new record
+        setSelectedRecord(null)
         setModalOpen(true)
     }
 
-    const handleOpenEdit = (record: any) => {
-        setSelectedRecord(record) // Load data for edit
-        setModalOpen(true)
+    const onSubmit = (value: CreateRecordFormInput) => {
+        if (!selectedRecord) {
+            createRec(value)
+        } else {
+            updateRec({ id: selectedRecord.id, data: value })
+        }
+    }
+
+    const onDelete = () => {
+        deleteRec({ id: targetId! })
     }
 
     const handleDelete = (id: string) => {
-        if (confirm("Delete this transaction? This cannot be undone.")) {
-            setRecords(records.filter(r => r.id !== id))
-        }
+        setTargetId(id)
+        setIsConfirmOpen(true)
     }
 
-    const handleSave = (data: any) => {
-        if (selectedRecord) {
-            console.log("Updating existing record:", data)
+
+    const openModal = (value: Transaction["data"] | null = null) => {
+        if (value) {
+            const formData = {
+                ...value,
+                amount: Number(value.amount),
+                categoryId: value.categoryId ?? "",
+                toWalletId: value.toWalletId ?? "",
+                description: value.description ?? "",
+                gramAmount: value.gramAmount ? Number(value.gramAmount) : undefined,
+                buyPrice: value.buyPrice ? Number(value.buyPrice) : undefined,
+                sellPrice: value.sellPrice ? Number(value.sellPrice) : undefined,
+                date: new Date(value.date),
+            };
+
+            reset(formData);
         } else {
-            console.log("Saving new record:", data)
+            reset({
+                type: 'OUTCOME',
+                amount: 0,
+                date: new Date(),
+                categoryId: "",
+                walletId: "",
+                isInvestment: false
+            });
         }
-        // Here you would call your tRPC mutation or API
+        setSelectedRecord(value)
+        setModalOpen(true)
     }
+
+
+    const onModalClose = () => {
+        clearErrors()
+        setModalOpen(false)
+    }
+
+    useEffect(() => {
+        if (getErr) {
+            setErrMdOpen(getErr)
+            setErrMsg(getErrMsg.message)
+        }
+        if (createErr) {
+            setErrMdOpen(createErr)
+            setErrMsg(createErrMsg.message)
+        }
+        if (updateErr) {
+            setErrMdOpen(updateErr)
+            setErrMsg(updateErrMsg.message)
+        }
+        if (deleteErr) {
+            setErrMdOpen(deleteErr)
+            setErrMsg(deleteErrMsg.message)
+        }
+        if (catErr) {
+            setErrMdOpen(catErr)
+            setErrMsg(catErrMsg.message)
+        }
+        if (wallErr) {
+            setErrMdOpen(wallErr)
+            setErrMsg(wallErrMsg.message)
+        }
+
+    }, [getErr, createErr, updateErr, deleteErr, catErr, wallErr])
+
+    useEffect(() => {
+        if (createScss) {
+            setSelectedRecord(null)
+            setModalOpen(false)
+            showToast("Record Created", "success")
+            reset()
+        }
+        if (updateScss) {
+            setSelectedRecord(null)
+            setModalOpen(false)
+            showToast("Record Updated", "success")
+            reset()
+        }
+        if (deleteScss) {
+            setIsConfirmOpen(false)
+            setTargetId(null)
+            showToast("Record Deleted", "success")
+        }
+    }, [createScss, updateScss, deleteScss])
 
     return (
-        <div>
+        <div className="pb-24">
             <div className="space-y-6">
-                {/* Filters & Header */}
+                {/* Header & Filters */}
                 <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-slate-900/40 p-4 rounded-3xl border border-slate-800">
                     <div className="flex items-center gap-2 overflow-x-auto pb-2 lg:pb-0 no-scrollbar">
                         {ranges.map((range) => (
                             <button
                                 key={range}
-                                onClick={() => setTimeRange(range)}
+                                onClick={() => setTimeRange(range as getAllRecordSchemaType["range"])}
                                 className={`px-4 py-2 rounded-xl text-sm font-bold transition-all shrink-0 ${timeRange === range
                                     ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20'
                                     : 'text-slate-500 hover:bg-slate-800 hover:text-slate-300'
@@ -101,66 +210,67 @@ export default function RecordsPage() {
                     </div>
                 </div>
 
-                {/* Transactions List */}
+                {/* Table List */}
+
                 <div className="bg-slate-900/20 border border-slate-800 rounded-3xl overflow-hidden">
                     <div className="overflow-x-auto">
                         <table className="w-full text-left border-collapse">
                             <thead>
                                 <tr className="border-b border-slate-800 bg-slate-900/50">
-                                    <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Category</th>
-                                    <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Date</th>
+                                    <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Info</th>
+                                    <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Source</th>
                                     <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Note</th>
                                     <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Amount</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-800/50">
-                                {records.map((tx) => (
+                                {data?.data.map((tx) => (
                                     <tr key={tx.id} className="group hover:bg-slate-800/30 transition-colors">
                                         <td className="px-6 py-4">
                                             <div className="flex items-center gap-3">
-                                                <div
-                                                    className="p-2 rounded-xl bg-slate-800 border border-slate-700 transition-transform group-hover:scale-110"
-                                                    style={{ color: tx.category.color }}
-                                                >
-                                                    <IconRenderer iconName={tx.category.icon} className="w-5 h-5" />
+                                                <div className="p-2 rounded-xl bg-slate-800 border border-slate-700"
+                                                    style={{ color: tx.category?.color || '#94a3b8' }}>
+                                                    {tx.type === 'TRANSFER'
+                                                        ? <HiArrowsRightLeft size={20} />
+                                                        : <IconRenderer iconName={tx.category?.icon || 'HiOutlineTag'} className="w-5 h-5" />
+                                                    }
                                                 </div>
-                                                <span className="font-semibold text-slate-200">{tx.category.name}</span>
+                                                <div>
+                                                    <p className="font-semibold text-slate-200">
+                                                        {tx.type === 'TRANSFER' ? 'Transfer' : tx.category?.name}
+                                                    </p>
+                                                    {/* Parsing tanggal karena response Prisma adalah Date object */}
+                                                    <p className="text-[10px] text-slate-500 uppercase">
+                                                        {new Date(tx.date).toLocaleDateString('id-ID', {
+                                                            day: '2-digit',
+                                                            month: 'short',
+                                                            year: 'numeric'
+                                                        })}
+                                                    </p>
+                                                </div>
                                             </div>
                                         </td>
-                                        <td className="px-6 py-4 text-sm text-slate-400 whitespace-nowrap">
-                                            {new Date(tx.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                        <td className="px-6 py-4 text-sm text-slate-400">
+                                            {tx.wallet.name} {tx.type === 'TRANSFER' && `→ ${tx.toWallet?.name}`}
                                         </td>
-                                        <td className="px-6 py-4 text-sm text-slate-500 italic max-w-50 truncate">
-                                            {tx.note || '-'}
+                                        <td className="px-6 py-4 text-sm text-slate-500 italic truncate max-w-50">
+                                            {tx.description || '-'}
+                                            {tx.isInvestment && (
+                                                <span className="ml-1 text-amber-500/80 font-medium">
+                                                    ({Number(tx.gramAmount)}g)
+                                                </span>
+                                            )}
                                         </td>
                                         <td className="px-6 py-4 text-right">
                                             <div className="flex flex-col items-end">
-                                                <span className={`font-bold text-lg ${tx.type === 'INCOME' ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                                    {tx.type === 'INCOME' ? '+' : '-'}
-                                                    {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(tx.amount)}
+                                                <span className={`font-bold text-lg ${tx.type === 'INCOME' ? 'text-emerald-400' :
+                                                    tx.type === 'TRANSFER' ? 'text-blue-400' : 'text-rose-400'
+                                                    }`}>
+                                                    {tx.type === 'INCOME' ? '+' : '-'} Rp {Number(tx.amount).toLocaleString('id-ID')}
                                                 </span>
-                                                <div className="flex items-center gap-1 mt-1">
-                                                    {tx.type === 'INCOME' ? (
-                                                        <HiOutlineArrowUpCircle className="text-emerald-500/50 w-3 h-3" />
-                                                    ) : (
-                                                        <HiOutlineArrowDownCircle className="text-rose-500/50 w-3   h-3" />
-                                                    )}
-                                                    <span className="text-[10px] uppercase font-bold text-slate-600 tracking-widest">{tx.type}</span>
-                                                </div>
-                                                {/* Action Buttons (Hover Only) */}
-                                                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    <button
-                                                        onClick={() => handleOpenEdit(tx)}
-                                                        className="p-2 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white"
-                                                    >
-                                                        <HiOutlinePencil size={16} />
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handleDelete(tx.id)}
-                                                        className="p-2 hover:bg-rose-500/10 rounded-lg text-slate-400 hover:text-rose-500"
-                                                    >
-                                                        <HiOutlineTrash size={16} />
-                                                    </button>
+                                                <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity mt-1">
+                                                    <button onClick={() => openModal(tx)} className="text-slate-400 hover:text-white"><HiOutlinePencil size={16} /></button>
+                                                    <button onClick={() => handleDelete(tx.id)} className="text-slate-400 hover:text-rose-500"><HiOutlineTrash size={16} /></button>
                                                 </div>
                                             </div>
                                         </td>
@@ -169,30 +279,70 @@ export default function RecordsPage() {
                             </tbody>
                         </table>
                     </div>
+                    <div className="p-4 border-t border-slate-800 flex items-center justify-between text-sm text-slate-400">
+                        <span>Showing 1 - {itemsPerPage} from {data?.pagination.total} data</span>
+                        <div className="flex gap-2">
+                            {page > 1 && (
+                                <button
+                                    disabled={isLoading}
+                                    onClick={() => setPage(page - 1)}
+                                    className={`p-2 bg-slate-900 border border-slate-800 rounded-lg ${isLoading ? "cursor-not-allowed" : "cursor-pointer"} hover:bg-slate-800 hover:text-white transition disabled:opacity-50`}
+                                >
+                                    <HiChevronLeft />
+                                </button>
+                            )}
+
+                            {visiblePages.map((p, index) => (
+                                <button
+                                    key={index}
+                                    onClick={() => setPage(p)}
+                                    disabled={isLoading}
+                                    className={`px-3 py-1 rounded-lg transition-all ${p === page ? "bg-slate-100 text-slate-950 font-semibold" : "bg-slate-900 text-slate-400 border border-slate-800 hover:bg-slate-800 hover:text-white"} ${isLoading ? "cursor-not-allowed" : "cursor-pointer"}`}
+                                >
+                                    {p}
+                                </button>
+                            ))}
+
+                            {page < totalPages && (
+                                <button
+                                    disabled={isLoading}
+                                    onClick={() => setPage(page + 1)}
+                                    className={`p-2 bg-slate-900 border border-slate-800 rounded-lg hover:bg-slate-800 hover:text-white transition ${isLoading ? "cursor-not-allowed" : "cursor-pointer"}`}
+                                >
+                                    <HiChevronRight />
+                                </button>
+                            )}
+                        </div>
+                    </div>
                 </div>
             </div>
-            {/* Floating Action Button */}
-            <button
-                onClick={handleOpenAdd}
-                className="fixed bottom-8 right-8 z-50 w-16 h-16 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full shadow-2xl shadow-indigo-500/40 flex items-center justify-center transition-all hover:scale-110 active:scale-95 group"
-            >
-                <HiOutlinePlus className="w-8 h-8 transition-transform group-hover:rotate-90" />
 
-                {/* Optional: Tooltip for Desktop */}
-                <span className="absolute right-20 bg-slate-800 text-white text-xs px-3 py-2 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap border border-slate-700">
-                    Add New Record
-                </span>
+            <button onClick={handleOpenAdd} className="fixed bottom-8 right-8 w-16 h-16 bg-indigo-600 rounded-full flex items-center justify-center shadow-xl hover:scale-110 transition-all z-50">
+                <HiOutlinePlus className="w-8 h-8 text-white" />
             </button>
+
             <AnimatePresence>
                 {isModalOpen && (
                     <RecordModal
-                        isOpen={isModalOpen}
-                        onClose={() => setModalOpen(false)}
-                        initialData={selectedRecord}
-                        onSave={handleSave}
+                        onSubmit={onSubmit}
+                        onClose={onModalClose}
+                        isEditing={Boolean(selectedRecord)}
+                        isPending={createPend || updatePend}
+                        reactForm={reactForm}
+                        wallets={wallData?.data ?? []}
+                        categories={catData?.data ?? []}
+
                     />
                 )}
             </AnimatePresence>
+            <ConfirmModal
+                isPending={deletePend}
+                isOpen={isConfirmOpen}
+                message='This action cannot be undone. All records linked to this records will lose.'
+                onClose={() => setIsConfirmOpen(false)}
+                onConfirm={onDelete}
+            />
+            <ErrorModal isOpen={isErrMdOpen} onClose={() => setErrMdOpen(false)} message={errMsg || ""} />
         </div>
     )
 }
