@@ -1,196 +1,243 @@
 "use client"
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import {
-    AreaChart, Area, XAxis, YAxis, CartesianGrid,
-    Tooltip, ResponsiveContainer
+    LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+    PieChart, Pie, Cell,
+    Legend
 } from 'recharts'
 import {
+    HiOutlinePlus,
+    HiOutlineBriefcase,
+    HiOutlineChartPie,
     HiOutlineScale,
-    HiOutlinePencil,
-    HiOutlineTrash,
-    HiOutlinePlus
+    HiOutlineCalendar
 } from "react-icons/hi2"
-import { HiOutlineTrendingDown, HiOutlineTrendingUp } from "react-icons/hi";
-import { GiGoldBar } from "react-icons/gi"
 import { AnimatePresence } from 'framer-motion'
-import GoldRecordModal from './components/GoldRecordModal'
-import { formatToRupiah } from '@/utils/fomatCurrency';
+import { formatToRupiah } from '@/utils/fomatCurrency'
+import CreateInvestmentModal from './components/InvestmentModal'
 
-// Mock Data for the Price Chart
-const goldPriceHistory = [
-    { date: '13 Apr', price: 1210000 },
-    { date: '14 Apr', price: 1215000 },
-    { date: '15 Apr', price: 1208000 },
-    { date: '16 Apr', price: 1225000 },
-    { date: '17 Apr', price: 1230000 },
-    { date: '18 Apr', price: 1245000 },
-    { date: '19 Apr', price: 1240000 },
-]
+interface Transaction {
+    id: string;
+    date: string;
+    amount: number;
+    quantity: number;
+}
+
+interface InvestmentCategory {
+    id: string;
+    assetName: string;
+    type: string;
+    totalQuantity: number;
+    currentPurchasePrice: number;
+    transactions: Transaction[]; // Tambahkan ini
+}
+
+const mockInvestments: InvestmentCategory[] = [
+    {
+        id: '1',
+        assetName: 'Logam Mulia Antam',
+        type: 'GOLD',
+        totalQuantity: 10,
+        currentPurchasePrice: 1200000,
+        transactions: [
+            { id: 'tx1', date: '2026-04-20', amount: 1200000, quantity: 1 },
+            { id: 'tx2', date: '2026-03-15', amount: 2400000, quantity: 2 },
+        ]
+    },
+    // ... data lainnya
+];
+
+const COLORS = ['#6366f1', '#f59e0b', '#10b981', '#ec4899'];
 
 export default function InvestmentPage() {
-    const [timeRange, setTimeRange] = useState('7D')
     const [isModalOpen, setModalOpen] = useState(false)
-    const [selectedRecord, setSelectedRecord] = useState<any>(null)
+    const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
 
-    const handleOpenAdd = () => {
-        setSelectedRecord(null)
-        setModalOpen(true)
-    }
+    // 1. Data Aggregation for Line Chart (Growth by Year)
+    const monthlyLineData = useMemo(() => {
+        const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-    const handleEdit = (record: any) => {
-        setSelectedRecord(record)
-        setModalOpen(true)
-    }
+        return months.map((month, index) => {
+            const monthlyValue = mockInvestments.reduce((acc, inv) => {
+                // Sekarang TypeScript tahu 'transactions' ada di dalam 'inv'
+                const totalMonthlyForAsset = inv.transactions
+                    .filter(tx => {
+                        const d = new Date(tx.date);
+                        return d.getMonth() === index && d.getFullYear() === selectedYear;
+                    })
+                    .reduce((sum, tx) => sum + tx.amount, 0);
+                return acc + totalMonthlyForAsset;
+            }, 0);
 
+            return { name: month, value: monthlyValue };
+        });
+    }, [selectedYear]);
 
-    // Portfolio Summary (Mock)
-    const currentPricePerGram = 1240000
-    const avgPurchasePrice = 1150000
-    const totalGrams = 12.5
-    const currentValuation = totalGrams * currentPricePerGram
-    const totalInvestment = totalGrams * avgPurchasePrice
-    const profitLoss = currentValuation - totalInvestment
-    const profitPercentage = (profitLoss / totalInvestment) * 100
+    // 2. Summary Calculations
+    const totalValue = useMemo(() =>
+        mockInvestments.reduce((acc, inv) => acc + (inv.totalQuantity * inv.currentPurchasePrice), 0)
+        , []);
+
+    const chartData = useMemo(() =>
+        mockInvestments.map(inv => ({
+            name: inv.assetName,
+            value: inv.totalQuantity * inv.currentPurchasePrice
+        }))
+        , []);
 
     return (
-        <div>
-            <div className="space-y-8 pb-20">
-                {/* 1. Header & Summary Cards */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div className="bg-slate-900 border border-slate-800 p-6 rounded-[2.5rem] relative overflow-hidden">
-                        <div className="absolute -right-4 -top-4 text-amber-500/10"><GiGoldBar size={120} /></div>
-                        <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mb-2">Total Gold Balance</p>
-                        <h3 className="text-3xl font-black text-white mb-1">{totalGrams} <span className="text-sm font-medium text-slate-500">gram</span></h3>
-                        <p className="text-xl font-bold text-indigo-400">
-                            {formatToRupiah(currentValuation)}
-                        </p>
-                    </div>
-
-                    <div className="bg-slate-900 border border-slate-800 p-6 rounded-[2.5rem] flex flex-col justify-center">
-                        <div className="flex items-center gap-2 mb-2">
-                            <HiOutlineScale className="text-slate-500" />
-                            <p className="text-slate-500 text-xs font-bold uppercase tracking-widest">Avg. Buy Price</p>
-                        </div>
-                        <h3 className="text-2xl font-bold text-white">
-                            {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(avgPurchasePrice)}
-                            <span className="text-xs text-slate-500 ml-2">/ gram</span>
-                        </h3>
-                    </div>
-
-                    <div className="bg-slate-900 border border-slate-800 p-6 rounded-[2.5rem] flex flex-col justify-center">
-                        <div className="flex items-center gap-2 mb-2">
-                            {profitLoss >= 0 ? <HiOutlineTrendingUp className="text-emerald-500" /> : <HiOutlineTrendingDown className="text-rose-500" />}
-                            <p className="text-slate-500 text-xs font-bold uppercase tracking-widest">Total Profit / Loss</p>
-                        </div>
-                        <h3 className={`text-2xl font-black ${profitLoss >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                            {profitLoss >= 0 ? '+' : ''}
-                            {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(profitLoss)}
-                        </h3>
-                        <p className={`text-sm font-bold ${profitLoss >= 0 ? 'text-emerald-500/60' : 'text-rose-500/60'}`}>
-                            {profitLoss >= 0 ? '▲' : '▼'} {profitPercentage.toFixed(2)}%
-                        </p>
-                    </div>
+        <div className="space-y-8 pb-24">
+            {/* 1. Header Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="bg-slate-900 border border-slate-800 p-8 rounded-[2.5rem] shadow-xl relative overflow-hidden">
+                    <div className="absolute -right-4 -bottom-4 text-indigo-500/5 rotate-12"><HiOutlineBriefcase size={120} /></div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Portfolio Value</p>
+                    <h3 className="text-3xl font-black text-white">{formatToRupiah(totalValue)}</h3>
                 </div>
 
-                {/* 2. Gold Price Chart */}
                 <div className="bg-slate-900 border border-slate-800 p-8 rounded-[2.5rem]">
-                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
-                        <div>
-                            <h3 className="text-xl font-bold text-white">Gold Market Price</h3>
-                            <p className="text-sm text-slate-500">Live price tracking for 1 gram (Antam/Global)</p>
-                        </div>
-                        <div className="flex bg-slate-950 p-1 rounded-xl border border-slate-800 overflow-x-auto no-scrollbar">
-                            {['7D', '30D', '12W', '6M', '1Y'].map((range) => (
-                                <button
-                                    key={range}
-                                    onClick={() => setTimeRange(range)}
-                                    className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${timeRange === range ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}
-                                >
-                                    {range}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-
-                    <div className="h-75 w-full">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <AreaChart data={goldPriceHistory}>
-                                <defs>
-                                    <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
-                                        <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
-                                    </linearGradient>
-                                </defs>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-                                <XAxis dataKey="date" stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} />
-                                <YAxis hide />
-                                <Tooltip
-                                    contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '12px' }}
-                                    itemStyle={{ color: '#818cf8', fontWeight: 'bold' }}
-                                />
-                                <Area type="monotone" dataKey="price" stroke="#6366f1" strokeWidth={3} fillOpacity={1} fill="url(#colorPrice)" />
-                            </AreaChart>
-                        </ResponsiveContainer>
-                    </div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">Total Assets</p>
+                    <h3 className="text-3xl font-black text-white">{mockInvestments.length} <span className="text-sm font-medium text-slate-600 underline">Categories</span></h3>
                 </div>
 
-                {/* 3. Recent Transactions List */}
-                <div className="bg-slate-900 border border-slate-800 rounded-[2.5rem] overflow-hidden">
-                    <div className="p-8 border-b border-slate-800">
-                        <h3 className="text-lg font-bold">Recent Purchases</h3>
+                <div className="bg-slate-900 border border-slate-800 p-8 rounded-[2.5rem] flex flex-col justify-between group hover:border-indigo-500/30 transition-all">
+                    <div className="flex justify-between items-center w-full">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Filter Year</p>
+                        <div className="p-2 bg-indigo-500/10 rounded-lg text-indigo-500 group-hover:scale-110 transition-transform">
+                            <HiOutlineCalendar size={18} />
+                        </div>
                     </div>
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left">
-                            <thead className="bg-slate-950/50">
-                                <tr>
-                                    <th className="px-8 py-4 text-xs font-bold text-slate-500 uppercase tracking-widest">Date</th>
-                                    <th className="px-8 py-4 text-xs font-bold text-slate-500 uppercase tracking-widest">Amount</th>
-                                    <th className="px-8 py-4 text-xs font-bold text-slate-500 uppercase tracking-widest">Price /g</th>
-                                    <th className="px-8 py-4 text-xs font-bold text-slate-500 uppercase tracking-widest text-right">Total Paid</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-800/50">
-                                {[1, 2].map((i) => (
-                                    <tr key={i} className="group hover:bg-slate-800/20 transition-colors">
-                                        <td className="px-8 py-5 text-sm text-slate-300">1{i} Apr 2026</td>
-                                        <td className="px-8 py-5 font-bold text-white">1.0 g</td>
-                                        <td className="px-8 py-5 text-sm text-slate-400">Rp 1.240.000</td>
-                                        <td className="px-8 py-5 text-right font-bold text-indigo-400">
-                                            <div className="flex items-center justify-end gap-4">
-                                                <span>Rp 1.240.000</span>
-                                                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    <button onClick={() => handleEdit({ id: i, amount: 1, price: 1240000 })} className="p-2 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white">
-                                                        <HiOutlinePencil size={16} />
-                                                    </button>
-                                                    <button className="p-2 hover:bg-rose-500/10 rounded-lg text-slate-400 hover:text-rose-500">
-                                                        <HiOutlineTrash size={16} />
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+
+                    <div className="relative mt-4">
+                        {/* Year Picker Dropdown */}
+                        <select
+                            value={selectedYear}
+                            onChange={(e) => setSelectedYear(Number(e.target.value))}
+                            className="w-full bg-slate-950 border border-slate-800 text-white text-sm font-bold rounded-2xl px-5 py-4 outline-none focus:border-indigo-500 transition-all appearance-none cursor-pointer"
+                        >
+                            {/* Generate tahun secara dinamis (misal: 5 tahun kebelakang) */}
+                            {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i).map((year) => (
+                                <option key={year} value={year}>
+                                    Investment Year: {year}
+                                </option>
+                            ))}
+                        </select>
+
+                        {/* Custom Arrow Icon untuk Select */}
+                        <div className="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" />
+                            </svg>
+                        </div>
                     </div>
                 </div>
             </div>
+
+            {/* 2. Line Chart: Growth Trend */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 ">
+                <div className="bg-slate-900 border  border-slate-800 p-8 rounded-[3rem]">
+                    <h3 className="text-xl font-black text-white mb-6">Asset Distribution</h3>
+                    <div className="h-72 w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                                <Pie
+                                    data={chartData}
+                                    cx="50%" cy="50%"
+                                    innerRadius={60}
+                                    outerRadius={100}
+                                    paddingAngle={8}
+                                    dataKey="value"
+                                >
+                                    {chartData.map((entry, index) => (
+                                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} stroke="none" />
+                                    ))}
+                                </Pie>
+                                <Tooltip
+                                    contentStyle={{ backgroundColor: '#0f172a', border: 'none', borderRadius: '12px', color: '#fff' }}
+                                    itemStyle={{ fontWeight: 'bold' }}
+                                    formatter={(value: any) => {
+                                        if (typeof value === 'number') {
+                                            return [formatToRupiah(value), "Market Value"];
+                                        }
+                                        return [value, "Market Value"];
+                                    }}
+                                />
+                                <Legend verticalAlign="bottom" height={36} />
+                            </PieChart>
+                        </ResponsiveContainer>
+                    </div>
+                </div>
+                <div className="bg-slate-900 border border-slate-800 p-8 rounded-[3rem]">
+                    <div className="mb-8">
+                        <h3 className="text-xl font-black text-white">Investment Trend</h3>
+                        <p className="text-xs text-slate-500 font-medium">Accumulated purchase value for {selectedYear}</p>
+                    </div>
+                    <div className="h-72 w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <LineChart data={monthlyLineData}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 11 }} dy={10} />
+                                <YAxis hide domain={['auto', 'auto']} />
+                                <Tooltip
+                                    content={({ active, payload }) => {
+                                        if (active && payload && payload.length) {
+                                            return (
+                                                <div className="bg-slate-950 border border-slate-800 p-4 rounded-2xl shadow-2xl">
+                                                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">{payload[0].payload.name} {selectedYear}</p>
+                                                    <p className="text-sm font-black text-indigo-400">{formatToRupiah(Number(payload[0].value))}</p>
+                                                </div>
+                                            );
+                                        }
+                                        return null;
+                                    }}
+                                />
+                                <Line
+                                    type="monotone"
+                                    dataKey="value"
+                                    stroke="#6366f1"
+                                    strokeWidth={4}
+                                    dot={{ r: 4, fill: '#6366f1', strokeWidth: 2, stroke: '#0f172a' }}
+                                    activeDot={{ r: 6, strokeWidth: 0 }}
+                                />
+                            </LineChart>
+                        </ResponsiveContainer>
+                    </div>
+                </div>
+            </div>
+
+
+            {/* 3. List Categories */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {mockInvestments.map((inv, index) => (
+                    <div key={inv.id} className="bg-slate-900 border border-slate-800 p-6 rounded-4xl flex justify-between items-center">
+                        <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-white" style={{ backgroundColor: COLORS[index % COLORS.length] }}>
+                                <HiOutlineScale size={20} />
+                            </div>
+                            <div>
+                                <h4 className="font-bold text-white text-sm">{inv.assetName}</h4>
+                                <p className="text-[10px] text-slate-500 font-bold uppercase">{inv.type}</p>
+                            </div>
+                        </div>
+                        <div className="text-right">
+                            <p className="font-black text-white">{formatToRupiah(inv.totalQuantity * inv.currentPurchasePrice)}</p>
+                            <p className="text-[10px] text-slate-500 font-medium">{inv.totalQuantity} Units</p>
+                        </div>
+                    </div>
+                ))}
+            </div>
+
+            {/* Float Add Button */}
             <button
-                onClick={handleOpenAdd}
-                className="fixed bottom-8 right-8 z-50 w-16 h-16 bg-amber-500 hover:bg-amber-600 text-slate-950 rounded-2xl shadow-2xl shadow-amber-500/20 flex items-center justify-center transition-all hover:scale-110 active:scale-95 group"
+                onClick={() => setModalOpen(true)}
+                className="fixed bottom-8 right-8 z-50 w-16 h-16 bg-indigo-600 text-white rounded-2xl shadow-2xl shadow-indigo-600/40 flex items-center justify-center hover:scale-110 transition-all active:scale-95 group"
             >
-                <HiOutlinePlus className="w-8 h-8 transition-transform group-hover:rotate-90" strokeWidth={2.5} />
+                <HiOutlinePlus size={32} className="group-hover:rotate-90 transition-transform" />
             </button>
+
             <AnimatePresence>
-                {isModalOpen && (
-                    <GoldRecordModal
-                        isOpen={isModalOpen}
-                        onClose={() => setModalOpen(false)}
-                        initialData={selectedRecord}
-                        onSave={(data) => console.log("Gold Record:", data)}
-                    />
-                )}
+                {isModalOpen && <CreateInvestmentModal isOpen={isModalOpen} onClose={() => setModalOpen(false)} />}
             </AnimatePresence>
         </div>
     )

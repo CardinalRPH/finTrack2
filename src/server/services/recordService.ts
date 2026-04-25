@@ -1,192 +1,150 @@
 import { TRPCError } from "@trpc/server";
 import { Context } from "../context";
 import { createRecordSchemaType, deleteRecordSchemaType, getAllRecordSchemaType, updateRecordSchemaType } from "../schemas/recordSchema";
+import { getMonth, getYear } from "date-fns";
 
 export const recordService = {
     createData: async ({ ctx, data }: { ctx: Context, data: createRecordSchemaType }) => {
         try {
             const {
                 type, amount, walletId, categoryId,
-                toWalletId, isInvestment, gramAmount, date, description, buyPrice, sellPrice
+                toWalletId, isInvestment, date, description,
+                investmentId,
             } = data;
+
             const created = await ctx.prisma.$transaction(async (tx) => {
-                let catId: null | string = null
-                if (isInvestment && gramAmount) {
-                    const existCategory = await ctx.prisma.category.findFirst({
-                        where: {
-                            userId: ctx.user!.id,
-                            name: {
-                                startsWith: "CT.Invest"
-                            }
-                        }
-                    })
+                let finalCategoryId = categoryId;
+
+                // 1. LOGIKA KATEGORI OTOMATIS
+                if (isInvestment) {
+                    const existCategory = await tx.category.findFirst({
+                        where: { userId: ctx.user!.id, name: "CTX.Invest" }
+                    });
                     if (!existCategory) {
-                        const newCat = await ctx.prisma.category.create({
-                            data: {
-                                name: "CT.Invest",
-                                userId: ctx.user!.id,
-                                icon: "GiGoldBar",
-                                color: "#f5db33"
-                            }
-                        })
-                        catId = newCat.id
+                        const newCat = await tx.category.create({
+                            data: { name: "CTX.Invest", userId: ctx.user!.id, icon: "GiGoldBar", color: "#f5db33" }
+                        });
+                        finalCategoryId = newCat.id;
                     } else {
-                        catId = existCategory.id
+                        finalCategoryId = existCategory.id;
+                    }
+                } else if (type === "TRANSFER" && toWalletId) {
+                    const existCategory = await tx.category.findFirst({
+                        where: { userId: ctx.user!.id, name: "CTX.Transfer" }
+                    });
+                    if (!existCategory) {
+                        const newCat = await tx.category.create({
+                            data: { name: "CTX.Transfer", userId: ctx.user!.id, icon: "HiArrowsRightLeft", color: "#33e8f5" }
+                        });
+                        finalCategoryId = newCat.id;
+                    } else {
+                        finalCategoryId = existCategory.id;
                     }
                 }
 
-                if (type === "TRANSFER" && toWalletId) {
-                    const existCategory = await ctx.prisma.category.findFirst({
-                        where: {
-                            userId: ctx.user!.id,
-                            name: {
-                                startsWith: "CT.Transfer"
-                            }
-                        }
-                    })
-                    if (!existCategory) {
-                        const newCat = await ctx.prisma.category.create({
-                            data: {
-                                name: "CT.Transfer",
-                                userId: ctx.user!.id,
-                                icon: "HiArrowsRightLeft",
-                                color: "#33e8f5"
-                            }
-                        })
-                        catId = newCat.id
-                    } else {
-                        catId = existCategory.id
-                    }
-                }
-
+                // 2. CREATE TRANSACTION RECORD
                 const transaction = await tx.transaction.create({
                     data: {
                         userId: ctx.user!.id,
                         walletId,
-                        categoryId: categoryId || catId,
+                        categoryId: finalCategoryId,
                         type,
                         amount,
                         description,
-                        date,
-                        isInvestment,
-                        gramAmount,
-                        buyPrice,
-                        sellPrice,
+                        date: date,
+                        investmentId,
                         toWalletId: type === "TRANSFER" ? toWalletId : null,
                     },
                 });
 
-                // 2. UPDATE SALDO DOMPET ASAL (WALLET)
+                // 3. UPDATE SALDO WALLET
                 if (type === "INCOME") {
                     await tx.wallet.update({
                         where: { id: walletId },
                         data: { balance: { increment: amount } },
                     });
                 } else {
-                    // OUTCOME atau TRANSFER akan mengurangi saldo dompet asal
                     await tx.wallet.update({
                         where: { id: walletId },
                         data: { balance: { decrement: amount } },
                     });
-                }
 
-                // 3. LOGIKA KHUSUS: TRANSFER
-                if (type === "TRANSFER" && toWalletId) {
-                    if (walletId === toWalletId) {
-                        throw new TRPCError({
-                            code: "BAD_REQUEST",
-                            message: "Cant transfer to the same wallet"
-                        })
+                    if (type === "TRANSFER" && toWalletId) {
+                        if (walletId === toWalletId) throw new TRPCError({ code: "BAD_REQUEST", message: "Cant transfer to the same wallet" });
+                        await tx.wallet.update({
+                            where: { id: toWalletId },
+                            data: { balance: { increment: amount } },
+                        });
                     }
-                    // Tambah saldo ke dompet tujuan
-                    await tx.wallet.update({
-                        where: { id: toWalletId },
-                        data: { balance: { increment: amount } },
+                }
+
+                // 4. LOGIKA INVESTMENT (Price Shifting)
+                // Di dalam Prisma Transaction saat membuat record baru
+                if (isInvestment && investmentId) {
+
+                    await tx.investment.update({
+                        where: { id: investmentId, userId: ctx.user!.id },
+                        data: {
+                            totalInvestment: {
+                                increment: amount
+                            }
+                        }
                     });
                 }
 
-                if (isInvestment && gramAmount) {
-                    await tx.investment.upsert({
-                        where: { userId: ctx.user!.id },
-                        create: {
-                            userId: ctx.user!.id,
-                            totalGrams: gramAmount,
-                            // Rumus simpel avg price: Total Bayar / Gram yang didapat
-                            avgBuyPrice: amount / gramAmount,
+                const currMonth = getMonth(date) + 1
+                const currYear = getYear(date)
+
+                const budgetData = await tx.categoryBudget.findUnique({
+                    where: {
+                        userId: ctx.user!.id,
+                        id: finalCategoryId,
+                        year: currYear,
+                        month: currMonth
+                    }
+                })
+
+                if (budgetData) {
+                    await tx.categoryBudget.update({
+                        where: {
+                            id: budgetData.id
                         },
-                        update: {
-                            // Kita perlu ambil data lama dulu untuk hitung rata-rata harga baru (Optional logic)
-                            totalGrams: { increment: gramAmount },
-                            // Di sini kamu bisa tambahkan logic matematika untuk avgBuyPrice yang lebih akurat
-                        },
-                    });
+                        data: {
+                            amount: Number(budgetData.amount) - amount
+                        }
+                    })
                 }
 
                 return transaction;
             });
 
-            return {
-                data: created
-            }
+            return { data: created };
         } catch (error) {
-            if (error instanceof TRPCError) {
-                throw error
-            }
-            console.error(error)
-            throw new TRPCError({
-                code: "INTERNAL_SERVER_ERROR",
-                message: "Internal Server Error",
-            })
+            if (error instanceof TRPCError) throw error;
+            console.error(error);
+            throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Gagal membuat record" });
         }
     },
+
     updateData: async ({ ctx, input }: { ctx: Context, input: updateRecordSchemaType }) => {
         try {
             const { id, data } = input;
 
             const updated = await ctx.prisma.$transaction(async (tx) => {
-                // 1. AMBIL DATA LAMA (Untuk kalkulasi balik saldo)
                 const oldRecord = await tx.transaction.findUnique({
                     where: { id, userId: ctx.user!.id },
                 });
 
-                if (!oldRecord) throw new Error("Transaction not found");
-
-                // 2. REVERSE (BATALKAN) EFEK LAMA PADA DOMPET
+                if (!oldRecord) throw new TRPCError({ code: "NOT_FOUND", message: "Transaction not found" });
                 if (oldRecord.type === "INCOME") {
-                    await tx.wallet.update({
-                        where: { id: oldRecord.walletId },
-                        data: { balance: { decrement: oldRecord.amount } },
-                    });
-                } else if (oldRecord.type === "OUTCOME" || oldRecord.type === "TRANSFER") {
-                    await tx.wallet.update({
-                        where: { id: oldRecord.walletId },
-                        data: { balance: { increment: oldRecord.amount } },
-                    });
-
-                    // Jika dulu adalah transfer, kembalikan saldo di dompet tujuan
+                    await tx.wallet.update({ where: { id: oldRecord.walletId }, data: { balance: { decrement: oldRecord.amount } } });
+                } else {
+                    await tx.wallet.update({ where: { id: oldRecord.walletId }, data: { balance: { increment: oldRecord.amount } } });
                     if (oldRecord.type === "TRANSFER" && oldRecord.toWalletId) {
-                        if (data.walletId === data.toWalletId) {
-                            throw new TRPCError({
-                                code: "BAD_REQUEST",
-                                message: "Cant transfer to the same wallet"
-                            })
-                        }
-                        await tx.wallet.update({
-                            where: { id: oldRecord.toWalletId },
-                            data: { balance: { decrement: oldRecord.amount } },
-                        });
+                        await tx.wallet.update({ where: { id: oldRecord.toWalletId }, data: { balance: { decrement: oldRecord.amount } } });
                     }
                 }
 
-                // 3. REVERSE EFEK INVESTASI (Jika dulu adalah investasi)
-                if (oldRecord.isInvestment && oldRecord.gramAmount) {
-                    await tx.investment.update({
-                        where: { userId: ctx.user!.id },
-                        data: { totalGrams: { decrement: oldRecord.gramAmount } },
-                    });
-                }
-
-                // 4. APPLY (TERAPKAN) DATA BARU
                 const updatedTransaction = await tx.transaction.update({
                     where: { id },
                     data: {
@@ -197,200 +155,125 @@ export const recordService = {
                         description: data.description,
                         date: data.date,
                         isInvestment: data.isInvestment,
-                        gramAmount: data.gramAmount,
-                        buyPrice: data.buyPrice,
-                        sellPrice: data.sellPrice,
+                        investmentId: data.investmentId,
                         toWalletId: data.type === "TRANSFER" ? data.toWalletId : null,
                     },
                 });
 
-                // 5. UPDATE SALDO DOMPET DENGAN DATA BARU
+                // Wallet New
                 if (data.type === "INCOME") {
-                    await tx.wallet.update({
-                        where: { id: data.walletId },
-                        data: { balance: { increment: data.amount } },
-                    });
+                    await tx.wallet.update({ where: { id: data.walletId }, data: { balance: { increment: data.amount } } });
                 } else {
-                    await tx.wallet.update({
-                        where: { id: data.walletId },
-                        data: { balance: { decrement: data.amount } },
-                    });
-
+                    await tx.wallet.update({ where: { id: data.walletId }, data: { balance: { decrement: data.amount } } });
                     if (data.type === "TRANSFER" && data.toWalletId) {
-                        await tx.wallet.update({
-                            where: { id: data.toWalletId },
-                            data: { balance: { increment: data.amount } },
-                        });
+                        await tx.wallet.update({ where: { id: data.toWalletId }, data: { balance: { increment: data.amount } } });
                     }
                 }
 
-                // 6. UPDATE SALDO EMAS DENGAN DATA BARU
-                if (data.isInvestment && data.gramAmount) {
+                // Investment Price Update (Optional: Only if price changed)
+                if (data.isInvestment && data.investmentId) {
+                    const investData = await tx.investment.findUnique({
+                        where: {
+                            id: data.investmentId
+                        }
+                    })
+                    if (!investData) {
+                        throw new TRPCError({ code: "BAD_REQUEST", message: "No invest data founded" });
+                    }
+                    const ttlInvest = Number(investData.totalInvestment) - Number(oldRecord.amount) + data.amount
                     await tx.investment.update({
-                        where: { userId: ctx.user!.id },
-                        data: { totalGrams: { increment: data.gramAmount } },
+                        where: { id: data.investmentId },
+                        data: { totalInvestment: ttlInvest }
                     });
                 }
 
                 return updatedTransaction;
             });
 
-            return {
-                data: updated
-            }
+            return { data: updated };
         } catch (error) {
-            if (error instanceof TRPCError) {
-                throw error
-            }
-            console.error(error)
-            throw new TRPCError({
-                code: "INTERNAL_SERVER_ERROR",
-                message: "Internal Server Error",
-            })
+            if (error instanceof TRPCError) throw error;
+            throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Gagal memperbarui record" });
         }
     },
+
     deleteData: async ({ ctx, input }: { ctx: Context, input: deleteRecordSchemaType }) => {
         try {
             await ctx.prisma.$transaction(async (tx) => {
-                // 1. CARI DATA LAMA UNTUK IDENTIFIKASI EFEK SALDO
                 const transaction = await tx.transaction.findUnique({
-                    where: {
-                        id: input.id,
-                        userId: ctx.user!.id // Keamanan: Pastikan hanya pemilik yang bisa hapus
-                    },
+                    where: { id: input.id, userId: ctx.user!.id },
                 });
 
-                if (!transaction) {
-                    throw new Error("Transaction not found or unauthorized");
-                }
+                if (!transaction) throw new TRPCError({ code: "NOT_FOUND", message: "Transaction not found" });
 
-                // 2. BATALKAN EFEK PADA DOMPET (WALLET)
+                // REVERSE WALLET
                 if (transaction.type === "INCOME") {
-                    // Jika dulu uang masuk, sekarang hapus = kurangi saldo
-                    await tx.wallet.update({
-                        where: { id: transaction.walletId },
-                        data: { balance: { decrement: transaction.amount } },
-                    });
-                } else if (transaction.type === "OUTCOME" || transaction.type === "TRANSFER") {
-                    // Jika dulu uang keluar, sekarang hapus = kembalikan saldo
-                    await tx.wallet.update({
-                        where: { id: transaction.walletId },
-                        data: { balance: { increment: transaction.amount } },
-                    });
-
-                    // Jika itu adalah transfer, tarik kembali saldo dari dompet tujuan
+                    await tx.wallet.update({ where: { id: transaction.walletId }, data: { balance: { decrement: transaction.amount } } });
+                } else {
+                    await tx.wallet.update({ where: { id: transaction.walletId }, data: { balance: { increment: transaction.amount } } });
                     if (transaction.type === "TRANSFER" && transaction.toWalletId) {
-                        await tx.wallet.update({
-                            where: { id: transaction.toWalletId },
-                            data: { balance: { decrement: transaction.amount } },
-                        });
+                        await tx.wallet.update({ where: { id: transaction.toWalletId }, data: { balance: { decrement: transaction.amount } } });
                     }
                 }
 
-                if (transaction.isInvestment && transaction.gramAmount) {
-                    await tx.investment.update({
-                        where: { userId: ctx.user!.id },
-                        data: { totalGrams: { decrement: transaction.gramAmount } },
-                    });
-                }
-
-                // 4. HAPUS TRANSAKSI SECARA PERMANEN
-                await tx.transaction.delete({
-                    where: { id: input.id },
-                });
-
-                return { success: true };
+                await tx.transaction.delete({ where: { id: input.id } });
             });
 
-            return {
-                message: "Data deleted"
-            }
+            return { message: "Data deleted" };
         } catch (error) {
-            if (error instanceof TRPCError) {
-                throw error
-            }
-            console.error(error)
-            throw new TRPCError({
-                code: "INTERNAL_SERVER_ERROR",
-                message: "Internal Server Error",
-            })
+            if (error instanceof TRPCError) throw error;
+            throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Gagal menghapus data" });
         }
     },
+
     getAllData: async ({ ctx, input }: { ctx: Context, input: getAllRecordSchemaType }) => {
         try {
             const { range, type, walletId, page } = input;
-            const limit = 20
-            const skip = (page - 1) * limit
+            const limit = 20;
+            const skip = (page - 1) * limit;
 
-            // 1. Logika Filter Tanggal
             let dateFilter = {};
             if (range) {
                 const now = new Date();
                 let startDate = new Date();
-
                 if (range === '7D') startDate.setDate(now.getDate() - 7);
                 else if (range === '30D') startDate.setDate(now.getDate() - 30);
-                else if (range === '12W') startDate.setDate(now.getDate() - (12 * 7));
                 else if (range === '6M') startDate.setMonth(now.getMonth() - 6);
                 else if (range === '1Y') startDate.setFullYear(now.getFullYear() - 1);
 
-                dateFilter = {
-                    date: {
-                        gte: startDate,
-                        lte: now,
-                    },
-                };
+                dateFilter = { date: { gte: startDate, lte: now } };
             }
 
             const [data, total] = await Promise.all([
                 ctx.prisma.transaction.findMany({
                     take: limit,
                     skip,
-                    where: {
-                        userId: ctx.user!.id,
-                        ...dateFilter,
-                        ...(type && { type }),
-                        ...(walletId && { walletId })
-                    },
+                    where: { userId: ctx.user!.id, ...dateFilter, ...(type && { type }), ...(walletId && { walletId }) },
                     include: {
-                        category: {
-                            select: { name: true, icon: true, color: true }
-                        },
-                        wallet: {
-                            select: { name: true, type: true }
-                        },
-                        toWallet: {
-                            select: { name: true }
-                        }
+                        category: { select: { name: true, icon: true, color: true } },
+                        wallet: { select: { name: true, type: true } },
+                        toWallet: { select: { name: true } },
+                        investment: { select: { assetName: true } }
                     },
-                    orderBy: {
-                        createdAt: 'desc', // Terbaru di atas
-                    },
+                    orderBy: { date: 'desc' },
                 }),
                 ctx.prisma.transaction.count({
-                    where: {
-                        userId: ctx.user!.id
-                    }
+                    where: { userId: ctx.user!.id, ...dateFilter, ...(type && { type }), ...(walletId && { walletId }) }
                 })
-            ])
-            const totalPages = Math.ceil(total / limit)
-
-            // 2. Query ke Database
+            ]);
 
             return {
-                data: data,
+                data,
                 pagination: {
                     page,
                     limit,
                     total,
-                    totalPages,
+                    totalPages: Math.ceil(total / limit),
                     hasNext: data.length === limit,
-                    nextPage: data.length === limit ? page + 1 : null,
-                    prevPage: page > 1 ? page - 1 : null
                 }
             };
         } catch (error) {
-
+            throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Gagal mengambil data" });
         }
     }
-}
+};

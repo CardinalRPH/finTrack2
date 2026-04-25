@@ -22,6 +22,7 @@ import ConfirmModal from '../components/DialogModal';
 import { useGetWallet } from '@/hooks/walletHook';
 import { useGetCategory } from '@/hooks/categoryHook';
 import getVisiblePages from '@/utils/getVisiblePage';
+import { useGetInvest } from '@/hooks/investHook';
 
 
 
@@ -49,6 +50,7 @@ export default function RecordsPage() {
     const { mutate: deleteRec, error: deleteErrMsg, isPending: deletePend, isError: deleteErr, isSuccess: deleteScss } = useDeleteRecord()
     const { data: wallData, error: wallErrMsg, isError: wallErr } = useGetWallet()
     const { data: catData, error: catErrMsg, isError: catErr } = useGetCategory()
+    const { data: invData, error: invErrMsg, isError: invErr } = useGetInvest()
 
     const reactForm = useForm<CreateRecordFormInput>({
         resolver: zodResolver(createRecordSchema),
@@ -152,8 +154,12 @@ export default function RecordsPage() {
             setErrMdOpen(wallErr)
             setErrMsg(wallErrMsg.message)
         }
+        if (invErr) {
+            setErrMdOpen(invErr)
+            setErrMsg(invErrMsg.message)
+        }
 
-    }, [getErr, createErr, updateErr, deleteErr, catErr, wallErr])
+    }, [getErr, createErr, updateErr, deleteErr, catErr, wallErr, invErr])
 
     useEffect(() => {
         if (createScss) {
@@ -257,7 +263,7 @@ export default function RecordsPage() {
                                             {tx.description || '-'}
                                             {tx.isInvestment && (
                                                 <span className="ml-1 text-amber-500/80 font-medium">
-                                                    ({Number(tx.gramAmount)}g)
+                                                    XXXXX
                                                 </span>
                                             )}
                                         </td>
@@ -324,6 +330,7 @@ export default function RecordsPage() {
             <AnimatePresence>
                 {isModalOpen && (
                     <RecordModal
+                        investments={invData?.data ?? []}
                         onSubmit={onSubmit}
                         onClose={onModalClose}
                         isEditing={Boolean(selectedRecord)}

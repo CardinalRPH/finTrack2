@@ -28,6 +28,9 @@ model Account {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@unique([provider, providerAccountId])
   @@index([userId])
 }
@@ -43,10 +46,11 @@ model Session {
 }
 
 model User {
-  id    String  @id @default(cuid())
-  name  String?
-  email String? @unique
-  image String?
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  image         String?
+  emailVerified DateTime?
 
   // Relations to financial data
   accounts     Account[]
@@ -54,8 +58,10 @@ model User {
   wallets      Wallet[]
   categories   Category[]
   transactions Transaction[]
-  createdAt    DateTime      @default(now())
   investments  Investment[]
+  budgets      CategoryBudget[]
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
 }
 
 // --- FINANCIAL MODELS ---
@@ -93,65 +99,82 @@ enum EntryType {
 }
 
 model Category {
-  id    String  @id @default(cuid())
+  id    String @id @default(cuid())
   name  String // e.g., "Food", "Salary", "Investment"
   icon  String // e.g., "Utensils", "Wallet", "TrendingUp" (Lucide icon names)
   color String // Optional: hex code for UI branding (e.g., "#EF4444")
 
-  userId String? // Optional: null for "System Default", or ID for "User Custom"
-  user   User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
+  userId       String? // Optional: null for "System Default", or ID for "User Custom"
+  user         User?            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  budgets      CategoryBudget[]
   transactions Transaction[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([name, userId])
   @@index([userId])
 }
 
 model Transaction {
-  id         String  @id @default(cuid())
-  userId     String
-  walletId   String
-  categoryId String?
+  id           String  @id @default(cuid())
+  userId       String
+  walletId     String
+  categoryId   String?
+  investmentId String? // Foreign Key ke Investment
+  isInvestment Boolean @default(false)
 
   type   EntryType
   amount Decimal   @db.Decimal(20, 2)
 
-  // Khusus untuk transaksi emas
-  isInvestment Boolean  @default(false)
-  gramAmount   Decimal? @db.Decimal(10, 3)
-
-  buyPrice  Decimal? @db.Decimal(20, 2) // Harga saat beli (per gram)
-  sellPrice Decimal? @db.Decimal(20, 2) // Harga saat jual (per gram)
-
   description String?  @db.Text
   date        DateTime @default(now())
 
-  // Logic Transfer: Jika type == TRANSFER, toWalletId harus diisi
+  // Logic Transfer
   toWalletId String?
 
-  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  wallet   Wallet    @relation("WalletFrom", fields: [walletId], references: [id], onDelete: Cascade)
-  toWallet Wallet?   @relation("WalletTo", fields: [toWalletId], references: [id], onDelete: SetNull)
-  category Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
-
-  createdAt DateTime @default(now())
-
-  @@index([userId])
-  @@index([walletId])
-  @@index([date])
-}
-
-model Investment {
-  id          String  @id @default(cuid())
-  userId      String  @unique
-  assetName   String  @default("Gold")
-  totalGrams  Decimal @default(0) @db.Decimal(10, 3)
-  avgBuyPrice Decimal @default(0) @db.Decimal(20, 2) // Untuk hitung Profit/Loss
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  wallet     Wallet      @relation("WalletFrom", fields: [walletId], references: [id], onDelete: Cascade)
+  toWallet   Wallet?     @relation("WalletTo", fields: [toWalletId], references: [id], onDelete: SetNull)
+  category   Category?   @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  investment Investment? @relation(fields: [investmentId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@index([userId])
+  @@index([walletId])
+  @@index([investmentId])
+  @@index([date])
+}
+
+model Investment {
+  id              String  @id @default(cuid())
+  userId          String
+  assetName       String
+  provider        String // e.g., DANA, BIBIT, PLUANG
+  totalInvestment Decimal @default(0) @db.Decimal(20, 2)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // transactions Transaction[]
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+}
+
+model CategoryBudget {
+  id         String   @id @default(cuid())
+  amount     Decimal  @db.Decimal(20, 2)
+  month      Int // 1-12
+  year       Int // e.g., 2026
+  userId     String
+  categoryId String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([userId, categoryId, month, year])
   @@index([userId])
 }
