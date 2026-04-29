@@ -11,7 +11,7 @@ import {
     HiOutlineUserCircle,
     HiOutlineArrowLeftOnRectangle
 } from "react-icons/hi2"
-import { GiGoldBar } from "react-icons/gi"
+import { GiGoldBar, GiPiggyBank } from "react-icons/gi"
 import { signOut, useSession } from 'next-auth/react'
 import { AnimatePresence, motion } from 'framer-motion'
 import Snackbar from './components/Snackbar'
@@ -23,6 +23,7 @@ const menuItems = [
     { name: 'Wallets', href: '/wallets', icon: HiOutlineWallet },
     { name: 'Categories', href: '/categories', icon: HiOutlineTag },
     { name: 'Investment', href: '/investment', icon: GiGoldBar },
+    { name: 'Budget', href: '/budget', icon: GiPiggyBank },
 ]
 
 const statisticSubItems = [

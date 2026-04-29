@@ -13,6 +13,7 @@ import { ReactNode, useEffect, useState } from 'react'
 import ErrorModal from '../components/ErrorModal'
 import { formatToRupiah } from '@/utils/fomatCurrency'
 import { IconType } from 'react-icons'
+import { IconRenderer } from '@/app/components/IconRenderer'
 
 // Mock Data - In a real app, this comes from your tRPC/API query
 const trendData = [
@@ -49,7 +50,7 @@ export default function Dashboard() {
                 {/* Header Stats */}
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                     <StatCard title="Total Balance" value={formatToRupiah(data?.data.totalBalance)} trend={`${data && data.data.trendsSumary.totalBalance >= 0 ? "+" : "-"}${data?.data.trendsSumary.totalBalance.toString()}%`} icon={<HiOutlineWallet />} color="indigo" />
-                    <StatCard title="Total Gold" value={data?.data.totalGold || 0} trend={`${data && data.data.trendsSumary.totalGold >= 0 ? "+" : "-"}${data?.data.trendsSumary.totalGold.toString()}g`} icon={<HiOutlineCube />} color="yellow" />
+                    <StatCard title="Total Invest" value={formatToRupiah(data?.data.totalInvest)} trend={`${data && data.data.trendsSumary.totalInvest >= 0 ? "+" : "-"}${data?.data.trendsSumary.totalInvest.toString()}%`} icon={<HiOutlineCube />} color="yellow" />
                     <StatCard title="Monthly Income" value={formatToRupiah(data?.data.monthlyIncome)} trend={`${data && data.data.trendsSumary.monthlyIncome >= 0 ? "+" : "-"}${data?.data.trendsSumary.monthlyIncome.toString()}%`} icon={<HiArrowUpRight />} color="emerald" />
                     <StatCard title="Monthly Outcome" value={formatToRupiah(data?.data.monthlyOutcome)} trend={`${data && data.data.trendsSumary.monthlyOutcome >= 0 ? "+" : "-"}${data?.data.trendsSumary.monthlyOutcome.toString()}%`} icon={<HiArrowDownLeft />} color="rose" />
                 </div>
@@ -60,7 +61,7 @@ export default function Dashboard() {
                         <h3 className="text-lg font-bold mb-6">Cashflow Trend (30 Days)</h3>
                         <div className="h-75 w-full flex-1">
                             <ResponsiveContainer width="100%" height={300}>
-                                <AreaChart data={data?.data.trendData}>
+                                <AreaChart data={data?.data.trendData.cashFlow}>
                                     <defs>
                                         <linearGradient id="colorInc" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#10b981" stopOpacity={0.3} /><stop offset="95%" stopColor="#10b981" stopOpacity={0} /></linearGradient>
                                         <linearGradient id="colorOut" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#f43f5e" stopOpacity={0.3} /><stop offset="95%" stopColor="#f43f5e" stopOpacity={0} /></linearGradient>
@@ -76,16 +77,16 @@ export default function Dashboard() {
                         </div>
                     </div>
 
-                    {/* Gold Investment Trend */}
+                    {/*  Investment Trend */}
                     <div className="bg-slate-900/50 border border-slate-800 p-6 rounded-3xl">
-                        <h3 className="text-lg font-bold mb-6 text-yellow-500">Gold Accumulation (gr)</h3>
+                        <h3 className="text-lg font-bold mb-6 text-yellow-500">Invest Accumulation</h3>
                         <div className="h-75 w-full flex-1">
                             <ResponsiveContainer width="100%" height={300}>
-                                <LineChart data={data?.data.goldTrendYearly}>
+                                <LineChart data={data?.data.trendData.investYear}>
                                     <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
                                     <XAxis dataKey="date" hide />
                                     <Tooltip contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #1e293b' }} />
-                                    <Line type="stepAfter" dataKey="gold" stroke="#eab308" strokeWidth={3} dot={{ r: 4, fill: '#eab308' }} />
+                                    <Line type="stepAfter" dataKey="amount" stroke="#eab308" strokeWidth={3} dot={{ r: 4, fill: '#eab308' }} />
                                 </LineChart>
                             </ResponsiveContainer>
                         </div>
@@ -102,17 +103,19 @@ export default function Dashboard() {
                             <button className="text-sm text-indigo-400 hover:underline">View All</button>
                         </div>
                         <div className="space-y-4">
-                            {lastTransactions.map((tx) => (
+                            {data?.data.recentTransactions.map((tx) => (
                                 <div key={tx.id} className="flex items-center justify-between p-3 hover:bg-slate-800/50 rounded-2xl transition-all">
                                     <div className="flex items-center gap-4">
-                                        <div className="text-2xl bg-slate-800 w-12 h-12 flex items-center justify-center rounded-xl">{tx.icon}</div>
+                                        <div className="text-2xl bg-slate-800 w-12 h-12 flex items-center justify-center rounded-xl"  style={{ color: tx.category?.color }}>
+                                            <IconRenderer iconName={tx.category!.icon} className="w-6 h-6" />
+                                        </div>
                                         <div>
-                                            <p className="font-medium">{tx.desc}</p>
-                                            <p className="text-xs text-slate-500">{tx.category} • {tx.date}</p>
+                                            <p className="font-medium">{tx.description}</p>
+                                            <p className="text-xs text-slate-500">{tx.category?.name} • {new Date(tx.date).toDateString()}</p>
                                         </div>
                                     </div>
-                                    <p className={`font-bold ${tx.amount > 0 ? 'text-emerald-400' : 'text-slate-300'}`}>
-                                        {tx.amount > 0 ? '+' : ''}{tx.amount.toLocaleString('id-ID')}
+                                    <p className={`font-bold ${Number(tx.amount) > 0 ? 'text-emerald-400' : 'text-slate-300'}`}>
+                                        {Number(tx.amount) > 0 ? '+' : ''}{Number(tx.amount).toLocaleString('id-ID')}
                                     </p>
                                 </div>
                             ))}
@@ -124,7 +127,7 @@ export default function Dashboard() {
                         <h3 className="text-lg font-bold mb-6">Net Balance Trend</h3>
                         <div className="h-62.5 w-full flex-1">
                             <ResponsiveContainer width="100%" height={300}>
-                                <BarChart data={trendData}>
+                                <BarChart data={data?.data.trendData.netWorth}>
                                     <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
                                     <XAxis dataKey="date" stroke="#64748b" fontSize={12} />
                                     <Tooltip cursor={{ fill: 'transparent' }} contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #1e293b' }} />

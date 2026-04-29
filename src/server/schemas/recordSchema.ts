@@ -2,7 +2,7 @@ import z from "zod";
 import { EntryType } from "../../../generated/prisma/enums";
 
 export const createRecordSchema = z.object({
-    type: z.nativeEnum(EntryType),
+    type: z.enum(EntryType),
     amount: z.number().positive("Nominal harus lebih dari 0"),
     walletId: z.string().min(1, "Dompet asal wajib dipilih"),
     categoryId: z.string().optional(), // Bisa opsional karena nanti dicover otomatis jika investasi
@@ -14,7 +14,7 @@ export const createRecordSchema = z.object({
 
     // Field Investasi
     isInvestment: z.boolean().default(false),
-    investmentId: z.string().optional(), // Link ke ID tabel Investment
+    investmentId: z.string().nullable().optional(), // Link ke ID tabel Investment
 })
 
 export type createRecordSchemaType = z.infer<typeof createRecordSchema>

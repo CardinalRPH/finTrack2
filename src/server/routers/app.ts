@@ -1,6 +1,7 @@
 
 
 import { createTRPCRouter } from '../trpc'
+import { budgetRouter } from './budgetRouter'
 import { categoryRouter } from './categoryRouter'
 import { dashboardRouter } from './dashboardRouter'
 import { investRouter } from './investRouter'
@@ -14,7 +15,8 @@ export const appRouter = createTRPCRouter({
     statistic: statisticRouter,
     record: recordRouter,
     dashboard: dashboardRouter,
-    investment:investRouter
+    investment: investRouter,
+    budget: budgetRouter
 })
 
 export type AppRouter = typeof appRouter

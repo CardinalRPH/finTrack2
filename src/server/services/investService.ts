@@ -3,6 +3,7 @@ import { Context } from "../context";
 import { investCreateSchemaType, investDashboardSchemaType, investDeleteSchemaType, investUpdateSchemaType } from "../schemas/investSchema";
 import { endOfYear, startOfYear } from "date-fns";
 
+const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 export const investService = {
     createData: async ({ ctx, input }: { ctx: Context, input: investCreateSchemaType }) => {
         try {
@@ -120,7 +121,7 @@ export const investService = {
         try {
             const { year } = input
             const baseDate = new Date(year, 0, 1);
-            const data = ctx.prisma.investment.findMany({
+            const data = await ctx.prisma.investment.findMany({
                 select: {
                     transactions: {
                         where: {
@@ -131,6 +132,10 @@ export const investService = {
                             NOT: {
                                 investmentId: null,
                             },
+                        },
+                        select: {
+                            date: true,
+                            amount: true
                         }
                     },
                     assetName: true,
@@ -148,8 +153,42 @@ export const investService = {
                 }
             })
 
+            const monthlyValues = new Array(12).fill(0);
+
+            const chartData = data.map((inv) => {
+                const totalAssetYearly = inv.transactions.reduce((sum, tx) => {
+                    const val = Number(tx.amount);
+                    const monthIndex = new Date(tx.date).getMonth();
+
+                    // Masukkan ke keranjang bulan yang sesuai
+                    monthlyValues[monthIndex] += val;
+
+                    return sum + val;
+                }, 0);
+
+                return { name: inv.assetName, value: totalAssetYearly };
+            });
+
+            const lineData = months.map((name, i) => ({
+                name,
+                value: monthlyValues[i]
+            }));
+
+
+            const fixData = data.map(({ transactions, ...rest }) => rest)
+            const totalInvest = fixData.reduce((sum, inv) => sum + Number(inv.totalInvestment), 0)
+
+
+
             return {
-                data
+                data: {
+                    graph: {
+                        lineData,
+                        chartData
+                    },
+                    list: fixData,
+                    totalInvest
+                }
             }
         } catch (error) {
             if (error instanceof TRPCError) {

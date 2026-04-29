@@ -33,6 +33,15 @@ export default function RecordModal({
     const type = watch("type")
     const isInvestment = watch("isInvestment")
     const walletId = watch("walletId")
+    const strDate = watch("date")
+
+    useEffect(() => {
+        if (isEditing) {
+            const isoDate = new Date(String(strDate)).toISOString().split('T')[0];
+
+            setValue("date", isoDate);
+        }
+    }, [isEditing, setValue]);
 
     return (
         <div className="fixed inset-0 z-70 flex items-center justify-center p-4">
@@ -54,7 +63,6 @@ export default function RecordModal({
                     {/* Amount Input */}
                     <div className="text-center">
                         <input
-                            disabled={isInvestment}
                             type="number"
                             {...register("amount", { valueAsNumber: true })}
                             className={`bg-transparent text-5xl font-black outline-none w-full text-center transition-colors ${type === 'INCOME' ? 'text-emerald-400' :

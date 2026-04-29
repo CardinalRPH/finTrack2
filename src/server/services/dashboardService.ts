@@ -1,8 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import { Context } from "../context";
-import { startOfMonth, endOfMonth, subDays, format, subMonths } from "date-fns";
-import { EntryType } from "../../../generated/prisma/enums";
-import { Decimal } from "../../../generated/prisma/internal/prismaNamespace";
+import { startOfMonth, endOfMonth, subDays, format, subMonths, eachDayOfInterval, isSameDay } from "date-fns";
 
 export const dashboardService = {
     getData: async ({ ctx }: { ctx: Context }) => {
@@ -12,10 +10,17 @@ export const dashboardService = {
             const rangeLastMonth = { gte: startOfMonth(subMonths(now, 1)), lte: endOfMonth(subMonths(now, 1)) };
             const rangeOneYear = { gte: subDays(now, 365) }; // Untuk trend emas 1 tahun
 
+            const thirtyDaysAgo = subDays(now, 30);
+            const allDays = eachDayOfInterval({
+                start: thirtyDaysAgo,
+                end: now,
+            });
+
             const [
-                wallets, monthlyStats, goldStats,
+                wallets, monthlyStats, investStat,
                 recentTransactions, last30Days,
-                lastMonthStats, prevGoldAgg, goldYearlyTransactions
+                lastMonthStats, prevInvestAgg, investYearlyTransactions,
+                walletHistory, lastHistoryBefore
             ] = await Promise.all([
                 ctx.prisma.wallet.aggregate({ _sum: { balance: true } }),
                 ctx.prisma.transaction.groupBy({
@@ -25,7 +30,7 @@ export const dashboardService = {
                 }),
                 ctx.prisma.transaction.aggregate({
                     where: { isInvestment: true },
-                    _sum: { gramAmount: true }
+                    _sum: { amount: true }
                 }),
                 ctx.prisma.transaction.findMany({
                     take: 5,
@@ -33,7 +38,7 @@ export const dashboardService = {
                     include: { category: true }
                 }),
                 ctx.prisma.transaction.findMany({
-                    where: { date: { gte: subDays(now, 30) } },
+                    where: { date: { gte: thirtyDaysAgo } },
                     orderBy: { date: 'asc' }
                 }),
                 ctx.prisma.transaction.groupBy({
@@ -43,14 +48,51 @@ export const dashboardService = {
                 }),
                 ctx.prisma.transaction.aggregate({
                     where: { isInvestment: true, date: { lt: rangeCurrent.gte } },
-                    _sum: { gramAmount: true }
+                    _sum: { amount: true }
                 }),
                 ctx.prisma.transaction.findMany({
                     where: { isInvestment: true, date: rangeOneYear },
                     orderBy: { date: 'asc' },
-                    select: { date: true, gramAmount: true }
+                    select: { date: true, amount: true }
+                }),
+                ctx.prisma.walletHistory.findMany({
+                    where: { userId: ctx.user!.id, date: { gte: thirtyDaysAgo } },
+                    orderBy: { date: 'asc' }
+                }),
+                ctx.prisma.walletHistory.findMany({
+                    where: { userId: ctx.user!.id, date: { lt: thirtyDaysAgo } },
+                    orderBy: { date: 'desc' },
+                    distinct: ['walletId'] // Ambil saldo terakhir per wallet
                 })
             ]);
+
+
+            // --- Networth TREND ---
+            const lastWalletBalances = new Map<string, number>();
+            lastHistoryBefore.forEach((h) => {
+                lastWalletBalances.set(h.walletId, Number(h.balance));
+            });
+
+            const netWorthData = allDays.map((day) => {
+                const dailyChanges = walletHistory.filter((h) =>
+                    isSameDay(new Date(h.date), day)
+                );
+
+                if (dailyChanges.length > 0) {
+                    dailyChanges.forEach((change) => {
+                        lastWalletBalances.set(change.walletId, Number(change.balance));
+                    });
+                }
+                const totalDailyBalance = Array.from(lastWalletBalances.values()).reduce(
+                    (sum, balance) => sum + balance,
+                    0
+                );
+
+                return {
+                    date: format(day, 'dd MMM'),
+                    balance: totalDailyBalance,
+                };
+            });
 
             // Helpers
             const getSum = (stats: any[], type: 'INCOME' | 'OUTCOME') =>
@@ -62,24 +104,64 @@ export const dashboardService = {
             const prevOut = getSum(lastMonthStats, 'OUTCOME');
 
             const currentBalance = Number(wallets._sum.balance ?? 0);
-            const currentGold = Number(goldStats._sum.gramAmount ?? 0);
-            const previousGold = Number(prevGoldAgg._sum.gramAmount ?? 0);
+            const currentInvest = Number(investStat._sum.amount ?? 0);
+            const previousGold = Number(prevInvestAgg._sum.amount ?? 0);
 
+            // --- CASHFLOW LOGIC ---
+            const cashflowData = allDays.map((day) => {
+                // Cari transaksi yang terjadi di hari yang sama
+                const dailyTransactions = last30Days.filter((t) =>
+                    isSameDay(new Date(t.date), day)
+                );
+
+                // Akumulasi Income & Expense untuk hari tersebut
+                const income = dailyTransactions
+                    .filter((t) => t.type === 'INCOME')
+                    .reduce((sum, t) => sum + Number(t.amount), 0);
+
+                const outcome = dailyTransactions
+                    .filter((t) => t.type === 'OUTCOME')
+                    .reduce((sum, t) => sum + Number(t.amount), 0);
+
+                return {
+                    date: format(day, 'dd MMM'), // Output: "29 Apr"
+                    income,
+                    outcome,
+                };
+            });
+            // --- INVEST TREND ---
+            const investTrendYearData = investYearlyTransactions.reduce((acc, curr) => {
+                const dateLabel = curr.date.toLocaleString('default', {
+                    month: 'short',
+                    year: '2-digit'
+                });
+
+                // Cari apakah bulan ini sudah ada di accumulator
+                const existing = acc.find(item => item.date === dateLabel);
+
+                if (existing) {
+                    existing.amount += Number(curr.amount);
+                } else {
+                    acc.push({ date: dateLabel, amount: Number(curr.amount) });
+                }
+
+                return acc;
+            }, [] as { date: string, amount: number }[]);
             return {
                 data: {
                     totalBalance: currentBalance,
                     monthlyIncome: currentInc,
                     monthlyOutcome: currentOut,
-                    totalGold: currentGold,
+                    totalInvest: currentInvest,
                     recentTransactions,
-                    trendData: processTrendData(last30Days),
-                    goldTrendYearly: goldYearlyTransactions.map(t => ({
-                        date: format(t.date, 'MMM yy'),
-                        gram: Number(t.gramAmount ?? 0)
-                    })),
+                    trendData: {
+                        cashFlow: cashflowData,
+                        investYear: investTrendYearData,
+                        netWorth: netWorthData
+                    },
                     trendsSumary: {
                         totalBalance: calculateTrend(currentBalance, prevInc - prevOut),
-                        totalGold: calculateTrend(currentGold, previousGold),
+                        totalInvest: calculateTrend(currentInvest, previousGold),
                         monthlyIncome: calculateTrend(currentInc, prevInc),
                         monthlyOutcome: calculateTrend(currentOut, prevOut),
                     }
@@ -96,44 +178,11 @@ export const dashboardService = {
     }
 };
 
-type processTrendDataType = {
-    date: Date;
-    id: string;
-    createdAt: Date;
-    description: string | null;
-    type: EntryType;
-    userId: string;
-    walletId: string;
-    amount: Decimal;
-    categoryId: string | null;
-    toWalletId: string | null;
-    isInvestment: boolean;
-    gramAmount: Decimal | null;
-    buyPrice: Decimal | null;
-    sellPrice: Decimal | null;
-}
-
 export type TrendChartData = {
     date: string;
     income: number;
     outcome: number;
     balance: number;
-}
-
-function processTrendData(transactions: processTrendDataType[]) {
-    const chartMap = new Map<string, TrendChartData>();
-
-    transactions.forEach(tx => {
-        const day = format(tx.date, 'd MMM');
-        const current = chartMap.get(day) || { date: day, income: 0, outcome: 0, balance: 0 };
-
-        if (tx.type === 'INCOME') current.income += Number(tx.amount);
-        if (tx.type === 'OUTCOME') current.outcome += Number(tx.amount);
-
-        chartMap.set(day, current);
-    });
-
-    return Array.from(chartMap.values());
 }
 
 const calculateTrend = (current: number, previous: number) => {

@@ -1,7 +1,29 @@
 import { TRPCError } from "@trpc/server";
 import { Context } from "../context";
 import { createRecordSchemaType, deleteRecordSchemaType, getAllRecordSchemaType, updateRecordSchemaType } from "../schemas/recordSchema";
-import { getMonth, getYear } from "date-fns";
+import { endOfDay, getMonth, getYear, startOfDay, sub } from "date-fns";
+import { TransactionClient } from "../../../generated/prisma/internal/prismaNamespace";
+
+const syncWalletHistory = async (tx: TransactionClient, walletId: string, userId: string, date: Date) => {
+    const wallet = await tx.wallet.findUnique({ where: { id: walletId } });
+    if (!wallet) return;
+
+    const historyDate = new Date(date);
+    historyDate.setHours(0, 0, 0, 0);
+
+    await tx.walletHistory.upsert({
+        where: {
+            walletId_date: { walletId, date: historyDate }
+        },
+        update: { balance: wallet.balance },
+        create: {
+            walletId,
+            userId,
+            balance: wallet.balance,
+            date: historyDate
+        }
+    });
+};
 
 export const recordService = {
     createData: async ({ ctx, data }: { ctx: Context, data: createRecordSchemaType }) => {
@@ -50,6 +72,7 @@ export const recordService = {
                         categoryId: finalCategoryId,
                         type,
                         amount,
+                        isInvestment,
                         description,
                         date: date,
                         investmentId,
@@ -68,16 +91,16 @@ export const recordService = {
                         where: { id: walletId },
                         data: { balance: { decrement: amount } },
                     });
-
+                    await syncWalletHistory(tx, walletId, ctx.user!.id, date);
                     if (type === "TRANSFER" && toWalletId) {
                         if (walletId === toWalletId) throw new TRPCError({ code: "BAD_REQUEST", message: "Cant transfer to the same wallet" });
                         await tx.wallet.update({
                             where: { id: toWalletId },
                             data: { balance: { increment: amount } },
                         });
+                        await syncWalletHistory(tx, toWalletId, ctx.user!.id, date);
                     }
                 }
-
                 // 4. LOGIKA INVESTMENT (Price Shifting)
                 // Di dalam Prisma Transaction saat membuat record baru
                 if (isInvestment && investmentId) {
@@ -120,9 +143,14 @@ export const recordService = {
 
             return { data: created };
         } catch (error) {
-            if (error instanceof TRPCError) throw error;
-            console.error(error);
-            throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Gagal membuat record" });
+            if (error instanceof TRPCError) {
+                throw error
+            }
+            console.error(error)
+            throw new TRPCError({
+                code: "INTERNAL_SERVER_ERROR",
+                message: "Internal Server Error",
+            })
         }
     },
 
@@ -170,6 +198,11 @@ export const recordService = {
                     }
                 }
 
+                await syncWalletHistory(tx, data.walletId, ctx.user!.id, data.date);
+                if (data.type === "TRANSFER" && data.toWalletId) {
+                    await syncWalletHistory(tx, data.toWalletId, ctx.user!.id, data.date);
+                }
+
                 // Investment Price Update (Optional: Only if price changed)
                 if (data.isInvestment && data.investmentId) {
                     const investData = await tx.investment.findUnique({
@@ -192,8 +225,14 @@ export const recordService = {
 
             return { data: updated };
         } catch (error) {
-            if (error instanceof TRPCError) throw error;
-            throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Gagal memperbarui record" });
+            if (error instanceof TRPCError) {
+                throw error
+            }
+            console.error(error)
+            throw new TRPCError({
+                code: "INTERNAL_SERVER_ERROR",
+                message: "Internal Server Error",
+            })
         }
     },
 
@@ -217,12 +256,23 @@ export const recordService = {
                 }
 
                 await tx.transaction.delete({ where: { id: input.id } });
+
+                await syncWalletHistory(tx, transaction.walletId, ctx.user!.id, transaction.date);
+                if (transaction.type === "TRANSFER" && transaction.toWalletId) {
+                    await syncWalletHistory(tx, transaction.toWalletId, ctx.user!.id, transaction.date);
+                }
             });
 
             return { message: "Data deleted" };
         } catch (error) {
-            if (error instanceof TRPCError) throw error;
-            throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Gagal menghapus data" });
+            if (error instanceof TRPCError) {
+                throw error
+            }
+            console.error(error)
+            throw new TRPCError({
+                code: "INTERNAL_SERVER_ERROR",
+                message: "Internal Server Error",
+            })
         }
     },
 
@@ -235,13 +285,21 @@ export const recordService = {
             let dateFilter = {};
             if (range) {
                 const now = new Date();
-                let startDate = new Date();
-                if (range === '7D') startDate.setDate(now.getDate() - 7);
-                else if (range === '30D') startDate.setDate(now.getDate() - 30);
-                else if (range === '6M') startDate.setMonth(now.getMonth() - 6);
-                else if (range === '1Y') startDate.setFullYear(now.getFullYear() - 1);
+                let startDate: Date;
 
-                dateFilter = { date: { gte: startDate, lte: now } };
+                if (range === '7D') {
+                    startDate = sub(now, { days: 7 });
+                } else if (range === '30D') {
+                    startDate = sub(now, { days: 30 });
+                } else if (range === '6M') {
+                    startDate = sub(now, { months: 6 });
+                } else if (range === '1Y') {
+                    startDate = sub(now, { years: 1 });
+                } else {
+                    startDate = startOfDay(now);
+                }
+
+                dateFilter = { date: { gte: startDate, lte: endOfDay(now) } };
             }
 
             const [data, total] = await Promise.all([
@@ -259,7 +317,8 @@ export const recordService = {
                 }),
                 ctx.prisma.transaction.count({
                     where: { userId: ctx.user!.id, ...dateFilter, ...(type && { type }), ...(walletId && { walletId }) }
-                })
+                }),
+
             ]);
 
             return {
@@ -273,7 +332,15 @@ export const recordService = {
                 }
             };
         } catch (error) {
-            throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Gagal mengambil data" });
+            if (error instanceof TRPCError) {
+                throw error
+            }
+            console.error(error)
+            throw new TRPCError({
+                code: "INTERNAL_SERVER_ERROR",
+                message: "Internal Server Error",
+            })
         }
     }
 };
+

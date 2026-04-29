@@ -71,12 +71,8 @@ export default function RecordsPage() {
 
     const { show: showToast } = useSnackbar()
 
-    const handleOpenAdd = () => {
-        setSelectedRecord(null)
-        setModalOpen(true)
-    }
-
     const onSubmit = (value: CreateRecordFormInput) => {
+        console.log(value)
         if (!selectedRecord) {
             createRec(value)
         } else {
@@ -261,11 +257,6 @@ export default function RecordsPage() {
                                         </td>
                                         <td className="px-6 py-4 text-sm text-slate-500 italic truncate max-w-50">
                                             {tx.description || '-'}
-                                            {tx.isInvestment && (
-                                                <span className="ml-1 text-amber-500/80 font-medium">
-                                                    XXXXX
-                                                </span>
-                                            )}
                                         </td>
                                         <td className="px-6 py-4 text-right">
                                             <div className="flex flex-col items-end">
@@ -323,7 +314,7 @@ export default function RecordsPage() {
                 </div>
             </div>
 
-            <button onClick={handleOpenAdd} className="fixed bottom-8 right-8 w-16 h-16 bg-indigo-600 rounded-full flex items-center justify-center shadow-xl hover:scale-110 transition-all z-50">
+            <button onClick={() => openModal()} className="fixed bottom-8 right-8 w-16 h-16 bg-indigo-600 rounded-full flex items-center justify-center shadow-xl hover:scale-110 transition-all z-50">
                 <HiOutlinePlus className="w-8 h-8 text-white" />
             </button>
 
