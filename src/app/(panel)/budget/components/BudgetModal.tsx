@@ -1,8 +1,8 @@
+import { categoryDTO } from "@/server/dto/categoryDTO"
 import { createBudgetSchemaType } from "@/server/schemas/budgetSchema"
 import { motion } from "framer-motion"
 import { UseFormReturn } from "react-hook-form"
 import { HiOutlineX } from "react-icons/hi"
-import { Category } from "../../categories/dto"
 
 const BudgetModal = ({ onClose, isEditing, isPending, onSubmit, reactForm, categoryData }: {
     onClose: () => void,
@@ -10,7 +10,7 @@ const BudgetModal = ({ onClose, isEditing, isPending, onSubmit, reactForm, categ
     isEditing: boolean,
     onSubmit: (value: createBudgetSchemaType) => void,
     reactForm: UseFormReturn<createBudgetSchemaType>,
-    categoryData: Category[]
+    categoryData: categoryDTO[]
 }) => {
     const { formState: { errors }, handleSubmit, register, } = reactForm
 

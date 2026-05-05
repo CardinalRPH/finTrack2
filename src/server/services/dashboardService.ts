@@ -1,10 +1,17 @@
 import { TRPCError } from "@trpc/server";
 import { Context } from "../context";
 import { startOfMonth, endOfMonth, subDays, format, subMonths, eachDayOfInterval, isSameDay } from "date-fns";
+import { getDashboardDataDTO } from "../dto/dashboardDTO";
 
+export const getDashboardCacheKey = (userId: string) => `dashboard:${userId}`;
 export const dashboardService = {
     getData: async ({ ctx }: { ctx: Context }) => {
+        const cacheKey = getDashboardCacheKey(ctx.user!.id)
         try {
+
+            const cached = await ctx.cache.getCache<getDashboardDataDTO>(cacheKey);
+            if (cached) return { data: cached };
+
             const now = new Date();
             const rangeCurrent = { gte: startOfMonth(now), lte: endOfMonth(now) };
             const rangeLastMonth = { gte: startOfMonth(subMonths(now, 1)), lte: endOfMonth(subMonths(now, 1)) };
@@ -177,13 +184,6 @@ export const dashboardService = {
         }
     }
 };
-
-export type TrendChartData = {
-    date: string;
-    income: number;
-    outcome: number;
-    balance: number;
-}
 
 const calculateTrend = (current: number, previous: number) => {
     if (previous === 0) return current > 0 ? 100 : 0;

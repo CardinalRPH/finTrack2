@@ -11,6 +11,7 @@ import {
 } from "react-icons/hi2"
 import ErrorModal from '../../components/ErrorModal'
 import { formatToRupiah } from '@/utils/fomatCurrency'
+import { ReportsSkeleton } from './components/Skeleton'
 
 export default function ReportsPage() {
     const ranges = ['7D', '30D', '12W', '6M', '1Y']
@@ -26,6 +27,8 @@ export default function ReportsPage() {
             setErrMsg(getErrMsg.message)
         }
     }, [getErr])
+
+    if (isLoading) return <ReportsSkeleton />
 
     return (
         <div className="space-y-8 pb-16">

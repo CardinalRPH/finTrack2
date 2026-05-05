@@ -14,6 +14,7 @@ import { useGetBalance } from '@/hooks/statisticHook'
 import { getStatisticSchemaType } from '@/server/schemas/statisticSchema'
 import { formatToRupiah } from '@/utils/fomatCurrency'
 import ErrorModal from '../../components/ErrorModal'
+import { BalanceStatisticSkeleton } from './components/Skeleton'
 
 export default function BalanceStatisticPage() {
     const ranges = ['7D', '30D', '12W', '6M', '1Y']
@@ -29,6 +30,8 @@ export default function BalanceStatisticPage() {
         }
     }, [getErr])
 
+    if (isLoading) return <BalanceStatisticSkeleton />
+    
     return (
         <div className="space-y-8 pb-10">
             {/* 1. Filter Header */}

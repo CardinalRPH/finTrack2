@@ -2,8 +2,14 @@ import { TRPCError } from "@trpc/server";
 import { Context } from "../context";
 import { investCreateSchemaType, investDashboardSchemaType, investDeleteSchemaType, investUpdateSchemaType } from "../schemas/investSchema";
 import { endOfYear, startOfYear } from "date-fns";
+import { investAvaiYear, investDashboardDTO, investDataDTO } from "../dto/investDTO";
 
 const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const getInvestCacheKey = {
+    data: (userId: string) => `investment:${userId}`,
+    dashboard: (userId: string, year: number) => `investment:dashboard:${userId}:${year}`,
+    year: (userId: string) => `investment:year:${userId}`,
+}
 export const investService = {
     createData: async ({ ctx, input }: { ctx: Context, input: investCreateSchemaType }) => {
         try {
@@ -19,6 +25,8 @@ export const investService = {
                     totalInvestment: true,
                 }
             })
+
+            await ctx.cache.delCache(getInvestCacheKey.data(ctx.user!.id))
 
             return {
                 data: createdData
@@ -55,6 +63,8 @@ export const investService = {
                 }
             })
 
+            await ctx.cache.delCache(getInvestCacheKey.data(ctx.user!.id))
+
             return {
                 data: updated
             }
@@ -78,6 +88,12 @@ export const investService = {
                     userId: ctx.user!.id
                 }
             })
+
+            await ctx.cache.delCache(getInvestCacheKey.data(ctx.user!.id))
+
+            return {
+                message: "Data deleted"
+            }
         } catch (error) {
             if (error instanceof TRPCError) {
                 throw error
@@ -90,7 +106,13 @@ export const investService = {
         }
     },
     getAllData: async ({ ctx }: { ctx: Context }) => {
+        const cacheKey = getInvestCacheKey.data(ctx.user!.id)
         try {
+            const cached = await ctx.cache.getCache<investDataDTO[]>(cacheKey);
+
+            if (cached) {
+                return { data: cached };
+            }
             const data = await ctx.prisma.investment.findMany({
                 where: {
                     userId: ctx.user!.id
@@ -102,6 +124,8 @@ export const investService = {
                     totalInvestment: true,
                 }
             })
+
+            await ctx.cache.setCache(cacheKey, JSON.stringify(data));
 
             return {
                 data
@@ -118,7 +142,13 @@ export const investService = {
         }
     },
     getDashboardData: async ({ ctx, input }: { ctx: Context, input: investDashboardSchemaType }) => {
+        const cacheKey = getInvestCacheKey.dashboard(ctx.user!.id, input.year)
         try {
+            const cached = await ctx.cache.getCache<investDashboardDTO>(cacheKey);
+
+            if (cached) {
+                return { data: cached };
+            }
             const { year } = input
             const baseDate = new Date(year, 0, 1);
             const data = await ctx.prisma.investment.findMany({
@@ -178,17 +208,19 @@ export const investService = {
             const fixData = data.map(({ transactions, ...rest }) => rest)
             const totalInvest = fixData.reduce((sum, inv) => sum + Number(inv.totalInvestment), 0)
 
+            const result = {
+                graph: {
+                    lineData,
+                    chartData
+                },
+                list: fixData,
+                totalInvest
+            }
 
+            await ctx.cache.setCache(cacheKey, JSON.stringify(result));
 
             return {
-                data: {
-                    graph: {
-                        lineData,
-                        chartData
-                    },
-                    list: fixData,
-                    totalInvest
-                }
+                data: result
             }
         } catch (error) {
             if (error instanceof TRPCError) {
@@ -202,30 +234,50 @@ export const investService = {
         }
     },
     getAvaiYear: async ({ ctx }: { ctx: Context }) => {
-        const dataYear = await ctx.prisma.transaction.findMany({
-            where: {
-                userId: ctx.user!.id,
-                investmentId: { not: null }
-            },
-            select: {
-                date: true
-            },
-            orderBy: {
-                date: 'asc'
+        const cacheKey = getInvestCacheKey.year(ctx.user!.id)
+        try {
+            const cached = await ctx.cache.getCache<investAvaiYear[]>(cacheKey);
+
+            if (cached) {
+                return { data: cached };
             }
-        })
 
-        let years: number[] = []
+            const dataYear = await ctx.prisma.transaction.findMany({
+                where: {
+                    userId: ctx.user!.id,
+                    investmentId: { not: null }
+                },
+                select: {
+                    date: true
+                },
+                orderBy: {
+                    date: 'asc'
+                }
+            })
 
-        years = Array.from(
-            new Set(dataYear.map(tx => new Date(tx.date).getFullYear()))
-        );
-        if (years.length === 0) {
-            years = [new Date().getFullYear()]
-        }
+            let years: number[] = []
 
-        return {
-            data: years
+            years = Array.from(
+                new Set(dataYear.map(tx => new Date(tx.date).getFullYear()))
+            );
+            if (years.length === 0) {
+                years = [new Date().getFullYear()]
+            }
+
+            await ctx.cache.setCache(cacheKey, JSON.stringify(years));
+
+            return {
+                data: years
+            }
+        } catch (error) {
+            if (error instanceof TRPCError) {
+                throw error
+            }
+            console.error(error)
+            throw new TRPCError({
+                code: "INTERNAL_SERVER_ERROR",
+                message: "Internal Server Error",
+            })
         }
     }
 }

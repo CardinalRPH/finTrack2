@@ -12,6 +12,7 @@ import { getStatisticSchemaType } from '@/server/schemas/statisticSchema'
 import { useGetSpending } from '@/hooks/statisticHook'
 import { formatToRupiah } from '@/utils/fomatCurrency'
 import ErrorModal from '../../components/ErrorModal'
+import { SpendingSkeleton } from './components/Skeleton'
 
 export default function SpendingPage() {
     const ranges = ['7D', '30D', '12W', '6M', '1Y']
@@ -28,6 +29,8 @@ export default function SpendingPage() {
             setErrMsg(getErrMsg.message)
         }
     }, [getErr])
+
+    if (isLoading) return <SpendingSkeleton />
 
     return (
         <div className="space-y-8 pb-10">

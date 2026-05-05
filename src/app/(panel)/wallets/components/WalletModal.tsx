@@ -3,8 +3,8 @@ import { motion } from "framer-motion"
 import { HiOutlineXMark, HiOutlineCreditCard, HiOutlineBanknotes, HiOutlineDevicePhoneMobile } from "react-icons/hi2"
 import { UseFormReturn } from 'react-hook-form'
 import { walletCreateSchemaType } from '@/server/schemas/walletSchema'
-import { Wallet } from '../dto'
 import { WalletType } from '../../../../../generated/prisma/enums'
+import { walletDTO } from "@/server/dto/walletDTO"
 
 const WALLET_TYPES = [
     { id: 'E_WALLET' as WalletType, label: 'E-Wallet', icon: HiOutlineDevicePhoneMobile },
@@ -17,7 +17,7 @@ export default function WalletModal({ onClose, isEditing, reactForm, initData, i
     isEditing: boolean,
     onClose: () => void,
     onSubmit: (value: walletCreateSchemaType) => void,
-    initData: Wallet[]
+    initData: walletDTO[]
     reactForm: UseFormReturn<walletCreateSchemaType>
 
 }) {

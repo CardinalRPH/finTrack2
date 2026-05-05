@@ -12,25 +12,9 @@ import { useGetDashboard } from '@/hooks/dashboardHook'
 import { ReactNode, useEffect, useState } from 'react'
 import ErrorModal from '../components/ErrorModal'
 import { formatToRupiah } from '@/utils/fomatCurrency'
-import { IconType } from 'react-icons'
 import { IconRenderer } from '@/app/components/IconRenderer'
-
-// Mock Data - In a real app, this comes from your tRPC/API query
-const trendData = [
-    { date: '1 Apr', income: 5000000, outcome: 3200000, balance: 1800000, gold: 10.2 },
-    { date: '8 Apr', income: 0, outcome: 1500000, balance: 300000, gold: 10.5 },
-    { date: '15 Apr', income: 2000000, outcome: 800000, balance: 1500000, gold: 11.0 },
-    { date: '22 Apr', income: 1000000, outcome: 2500000, balance: 0, gold: 10.8 },
-    { date: '30 Apr', income: 7000000, outcome: 1200000, balance: 5800000, gold: 12.5 },
-]
-
-const lastTransactions = [
-    { id: 1, desc: 'Indomaret Coffee', amount: -25000, category: 'Food', icon: '🍔', date: '2 hours ago' },
-    { id: 2, desc: 'Salary Bonus', amount: 2000000, category: 'Work', icon: '💰', date: 'Yesterday' },
-    { id: 3, desc: 'Buy 1g Antam', amount: -1250000, category: 'Gold', icon: '✨', date: '2 days ago' },
-    { id: 4, desc: 'Gopay Topup', amount: -100000, category: 'Transfer', icon: '📱', date: '3 days ago' },
-    { id: 5, desc: 'Dinner', amount: -150000, category: 'Food', icon: '🍕', date: '4 days ago' },
-]
+import StatCard from './components/StatCard'
+import { DashboardSkeleton } from './components/Skeleton'
 
 export default function Dashboard() {
     const { data, isLoading, error: getErrMsg, isError: getErr } = useGetDashboard()
@@ -43,6 +27,8 @@ export default function Dashboard() {
             setErrMsg(getErrMsg.message)
         }
     }, [getErr])
+
+    if (isLoading) return <DashboardSkeleton />
 
     return (
         <div>
@@ -106,7 +92,7 @@ export default function Dashboard() {
                             {data?.data.recentTransactions.map((tx) => (
                                 <div key={tx.id} className="flex items-center justify-between p-3 hover:bg-slate-800/50 rounded-2xl transition-all">
                                     <div className="flex items-center gap-4">
-                                        <div className="text-2xl bg-slate-800 w-12 h-12 flex items-center justify-center rounded-xl"  style={{ color: tx.category?.color }}>
+                                        <div className="text-2xl bg-slate-800 w-12 h-12 flex items-center justify-center rounded-xl" style={{ color: tx.category?.color }}>
                                             <IconRenderer iconName={tx.category!.icon} className="w-6 h-6" />
                                         </div>
                                         <div>
@@ -139,35 +125,6 @@ export default function Dashboard() {
                 </div>
             </div>
             <ErrorModal isOpen={isErrMdOpen} onClose={() => setErrMdOpen(false)} message={errMsg || ""} />
-        </div>
-    )
-}
-
-function StatCard({ title, value, trend, icon, color }: {
-    title: string,
-    value: string | number,
-    trend: string,
-    icon: ReactNode,
-    color: string
-
-}) {
-    const colorMap: any = {
-        indigo: 'text-indigo-400 bg-indigo-400/10',
-        yellow: 'text-yellow-500 bg-yellow-500/10',
-        emerald: 'text-emerald-400 bg-emerald-400/10',
-        rose: 'text-rose-400 bg-rose-400/10',
-    }
-
-    return (
-        <div className="bg-slate-900/50 border border-slate-800 p-6 rounded-3xl hover:border-slate-700 transition-all group">
-            <div className="flex justify-between items-start mb-4">
-                <div className={`p-3 rounded-2xl ${colorMap[color]}`}>{icon}</div>
-                <span className={`text-xs font-bold px-2 py-1 rounded-lg ${trend.includes('+') ? 'bg-emerald-500/10 text-emerald-500' : 'bg-rose-500/10 text-rose-500'}`}>
-                    {trend}
-                </span>
-            </div>
-            <p className="text-slate-500 text-sm mb-1">{title}</p>
-            <p className="text-2xl font-bold tracking-tight">{value}</p>
         </div>
     )
 }

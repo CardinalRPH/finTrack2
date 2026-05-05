@@ -15,9 +15,14 @@ const envSchema = z.object({
     DATABASE_HOST: z.string(),
     DATABASE_PORT: z.coerce.number(),
 
-    AUTH_SECRET:z.string(),
-    AUTH_DISCORD_CLIENT_ID:z.string(),
-    AUTH_DISCORD_SECRET:z.string()
+    AUTH_SECRET: z.string(),
+    AUTH_DISCORD_CLIENT_ID: z.string(),
+    AUTH_DISCORD_SECRET: z.string(),
+
+    REDIS_HOST: z.string(),
+    REDIS_PORT: z.coerce.number(),
+    REDIS_PASSWORD: z.string(),
+    REDIS_KEY: z.string(),
 })
 
 const processEnv = envSchema.parse(process.env)

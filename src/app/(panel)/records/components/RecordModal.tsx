@@ -4,10 +4,10 @@ import { motion } from "framer-motion"
 import { HiOutlineXMark, HiOutlineCalendarDays, HiOutlineChatBubbleBottomCenterText, HiOutlineTag, HiOutlineCreditCard, HiOutlineArrowsRightLeft, HiOutlineSparkles } from "react-icons/hi2"
 import { UseFormReturn } from 'react-hook-form'
 import { CreateRecordFormInput } from '@/server/schemas/recordSchema'
-import { Wallet } from '../../wallets/dto'
-import { Category } from '../../categories/dto'
 import { useEffect } from "react"
-import { InvestType } from "../../investment/dto"
+import { categoryDTO } from "@/server/dto/categoryDTO"
+import { walletDTO } from "@/server/dto/walletDTO"
+import { investDataDTO } from "@/server/dto/investDTO"
 
 export default function RecordModal({
     isPending,
@@ -19,9 +19,9 @@ export default function RecordModal({
     categories,
     investments // Tambahkan prop ini
 }: {
-    wallets: Wallet[]
-    categories: Category[]
-    investments: InvestType[]
+    wallets: walletDTO[]
+    categories: categoryDTO[]
+    investments: investDataDTO[]
     isPending: boolean
     isEditing: boolean,
     onClose: () => void,

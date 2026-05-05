@@ -25,6 +25,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import ErrorModal from '../components/ErrorModal'
 import ConfirmModal from '../components/DialogModal'
+import { InvestmentSkeleton } from './components/Skeleton'
 
 
 const COLORS = ['#6366f1', '#f59e0b', '#10b981', '#ec4899'];
@@ -125,6 +126,9 @@ export default function InvestmentPage() {
             showToast("Category Deleted", "success")
         }
     }, [createScss, updateScss, deleteScss])
+
+    if (isLoading) return <InvestmentSkeleton />
+
     return (
         <div className="space-y-8 pb-24">
             {/* 1. Header Cards */}

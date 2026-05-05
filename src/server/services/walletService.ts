@@ -1,10 +1,19 @@
 import { TRPCError } from "@trpc/server";
 import { Context } from "../context";
 import { walletCreateSchemaType, walletUpdateSchemaType } from "../schemas/walletSchema";
+import { walletDTO } from "../dto/walletDTO";
 
+const getWaletCacheKey = (userId: string) => `wallet:${userId}`;
 export const walletService = {
     getAllData: async ({ ctx }: { ctx: Context }) => {
+        const cacheKey = getWaletCacheKey(ctx.user!.id)
         try {
+            const cached = await ctx.cache.getCache<walletDTO[]>(cacheKey);
+
+            if (cached) {
+                return { data: cached };
+            }
+
             const data = await ctx.prisma.wallet.findMany({
                 where: {
                     userId: ctx.user!.id
@@ -19,6 +28,8 @@ export const walletService = {
                     balance: true
                 }
             })
+
+            await ctx.cache.setCache(cacheKey, JSON.stringify(data));
 
             return {
                 data
@@ -36,6 +47,7 @@ export const walletService = {
 
     },
     updateData: async ({ ctx, data }: { ctx: Context, data: walletUpdateSchemaType }) => {
+        const cacheKey = getWaletCacheKey(ctx.user!.id)
         try {
             const updated = await ctx.prisma.wallet.update({
                 data: {
@@ -55,6 +67,8 @@ export const walletService = {
                 }
             })
 
+            await ctx.cache.delCache(cacheKey)
+
             return {
                 data: updated
             }
@@ -70,6 +84,7 @@ export const walletService = {
         }
     },
     createData: async ({ ctx, data }: { ctx: Context, data: walletCreateSchemaType }) => {
+        const cacheKey = getWaletCacheKey(ctx.user!.id)
         try {
 
             const existed = await ctx.prisma.wallet.findFirst({
@@ -97,6 +112,8 @@ export const walletService = {
                 }
             })
 
+            await ctx.cache.delCache(cacheKey)
+
             return {
                 data: createddat
             }
@@ -113,6 +130,7 @@ export const walletService = {
         }
     },
     deleteData: async ({ ctx, wallId }: { ctx: Context, wallId: string }) => {
+        const cacheKey = getWaletCacheKey(ctx.user!.id)
         try {
             await ctx.prisma.wallet.delete({
                 where: {
@@ -120,6 +138,7 @@ export const walletService = {
                     userId: ctx.user!.id
                 }
             })
+            await ctx.cache.delCache(cacheKey)
             return {
                 message: "Data deleted"
             }

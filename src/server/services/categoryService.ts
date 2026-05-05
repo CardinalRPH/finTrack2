@@ -1,10 +1,20 @@
 import { TRPCError } from "@trpc/server";
 import { Context } from "../context";
 import { categoryCreateSchemaType, categoryUpdateSchemaType } from "../schemas/categorySchema";
+import { categoryDTO } from "../dto/categoryDTO";
 
+const getCacheKey = (userId: string) => `categories:${userId}`;
 export const categoryService = {
     getAllData: async ({ ctx }: { ctx: Context }) => {
+        const cacheKey = getCacheKey(ctx.user!.id)
         try {
+            const cached = await ctx.cache.getCache<categoryDTO[]>(cacheKey);
+
+            if (cached) {
+                return { data: cached };
+            }
+
+
             const data = await ctx.prisma.category.findMany({
                 where: {
                     userId: ctx.user!.id
@@ -19,6 +29,8 @@ export const categoryService = {
                     color: true
                 }
             })
+
+            await ctx.cache.setCache(cacheKey, JSON.stringify(data));
 
             return {
                 data
@@ -36,6 +48,7 @@ export const categoryService = {
         }
     },
     updateData: async ({ ctx, data }: { ctx: Context, data: categoryUpdateSchemaType }) => {
+        const cacheKey = getCacheKey(ctx.user!.id)
         try {
             const updated = await ctx.prisma.category.update({
                 data: {
@@ -55,6 +68,8 @@ export const categoryService = {
                 }
             })
 
+            await ctx.cache.delCache(cacheKey)
+
             return {
                 data: updated
             }
@@ -72,6 +87,7 @@ export const categoryService = {
 
     },
     createData: async ({ ctx, data }: { ctx: Context, data: categoryCreateSchemaType }) => {
+        const cacheKey = getCacheKey(ctx.user!.id)
         try {
             const createdData = await ctx.prisma.category.create({
                 data: {
@@ -85,6 +101,8 @@ export const categoryService = {
                     color: true
                 }
             })
+
+            await ctx.cache.delCache(cacheKey)
 
             return {
                 data: createdData
@@ -101,6 +119,7 @@ export const categoryService = {
         }
     },
     deleteData: async ({ ctx, catId }: { ctx: Context, catId: string }) => {
+        const cacheKey = getCacheKey(ctx.user!.id)
         try {
             await ctx.prisma.category.delete({
                 where: {
@@ -108,6 +127,8 @@ export const categoryService = {
                     userId: ctx.user!.id
                 }
             })
+
+            await ctx.cache.delCache(cacheKey)
 
             return {
                 message: "Data deleted"

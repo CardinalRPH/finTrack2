@@ -3,7 +3,6 @@
 import { IconRenderer } from '@/app/components/IconRenderer'
 import { useEffect, useState } from 'react'
 import { HiOutlinePlus, HiOutlinePencil, HiOutlineTrash } from "react-icons/hi2"
-import { Category } from './dto'
 import CategoryModal from './components/CategoryModal'
 import { AnimatePresence } from 'framer-motion'
 import { useForm } from "react-hook-form";
@@ -13,12 +12,13 @@ import { useCreateCategory, useDeleteCategory, useGetCategory, useUpdateCategory
 import ErrorModal from '../components/ErrorModal'
 import { useSnackbar } from '@/stores/toastStore'
 import ConfirmModal from '../components/DialogModal'
+import { categoryDTO } from '@/server/dto/categoryDTO'
 
 
 export default function CategoriesPage() {
     const [isModalOpen, setModalOpen] = useState(false)
     const [isErrMdOpen, setErrMdOpen] = useState(false)
-    const [selectedCat, setSelectedCat] = useState<Category | null>(null)
+    const [selectedCat, setSelectedCat] = useState<categoryDTO | null>(null)
     const [errMsg, setErrMsg] = useState<string | null>(null)
     const [isConfirmOpen, setIsConfirmOpen] = useState(false)
     const [targetId, setTargetId] = useState<string | null>(null)
@@ -56,7 +56,7 @@ export default function CategoriesPage() {
     }
 
     // Open Modal for Create or Edit
-    const openModal = (category: Category | null = null) => {
+    const openModal = (category: categoryDTO | null = null) => {
         reset(category!)
         setSelectedCat(category)
         setModalOpen(true)

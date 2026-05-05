@@ -7,18 +7,19 @@ import WalletModal from './components/WalletModal'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { walletCreateSchema, walletCreateSchemaType } from '@/server/schemas/walletSchema'
-import { Wallet } from './dto'
 import { useSnackbar } from '@/stores/toastStore'
 import { useCreateWallet, useDeleteWallet, useGetWallet, useUpdateWallet } from '@/hooks/walletHook'
 import ConfirmModal from '../components/DialogModal'
 import ErrorModal from '../components/ErrorModal'
 import { formatToRupiah } from '@/utils/fomatCurrency'
+import { WalletSkeleton } from './components/Skeleton'
+import { walletDTO } from '@/server/dto/walletDTO'
 
 
 export default function WalletPage() {
     const [isModalOpen, setModalOpen] = useState(false)
     const [isErrMdOpen, setErrMdOpen] = useState(false)
-    const [selectedWall, setSelectedWall] = useState<Wallet | null>(null)
+    const [selectedWall, setSelectedWall] = useState<walletDTO | null>(null)
     const [errMsg, setErrMsg] = useState<string | null>(null)
     const [isConfirmOpen, setIsConfirmOpen] = useState(false)
     const [targetId, setTargetId] = useState<string | null>(null)
@@ -60,7 +61,7 @@ export default function WalletPage() {
         setIsConfirmOpen(true)
     }
 
-    const openModal = (wallet: Wallet | null = null) => {
+    const openModal = (wallet: walletDTO | null = null) => {
         reset({ ...wallet, balance: Number(wallet?.balance) })
         setSelectedWall(wallet)
         setModalOpen(true)
@@ -111,6 +112,8 @@ export default function WalletPage() {
             showToast("Wallet Deleted", "success")
         }
     }, [createScss, updateScss, deleteScss])
+
+    if (isLoading) return <WalletSkeleton />
 
 
     return (

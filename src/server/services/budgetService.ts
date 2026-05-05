@@ -2,10 +2,20 @@ import { TRPCError } from "@trpc/server";
 import { Context } from "../context";
 import { createBudgetSchemaType, deleteBudgetSchemaType, getAllBudgetSchemaType, updateBudgetSchemaType } from "../schemas/budgetSchema";
 import { endOfMonth, getMonth, getYear, startOfMonth } from "date-fns";
+import { budgetListDTO, budgetMonthYearDTO } from "../dto/budgetDTO";
+
+export const budgetCacheKeys = {
+    AVAIL_MONTHS: (userId: string) => `budget:avail:${userId}`,
+    LIST: (userId: string, monthYear: string) => `budget:list:${userId}:${monthYear}`,
+};
 
 export const budgetService = {
     getAvailMonthYear: async ({ ctx }: { ctx: Context }) => {
+        const cacheKey = budgetCacheKeys.AVAIL_MONTHS(ctx.user!.id);
         try {
+            const cached = await ctx.cache.getCache<budgetMonthYearDTO[]>(cacheKey);
+            if (cached) return { data: cached };
+
             const data = await ctx.prisma.categoryBudget.groupBy({
                 by: ['month', 'year'],
                 where: {
@@ -34,7 +44,12 @@ export const budgetService = {
 
     },
     getAllData: async ({ ctx, input }: { ctx: Context, input: getAllBudgetSchemaType }) => {
+        const cacheKey = budgetCacheKeys.LIST(ctx.user!.id, `${getYear(input.monthYear)}-${getMonth(input.monthYear) + 1}`);
         try {
+
+            const cached = await ctx.cache.getCache<budgetListDTO>(cacheKey);
+            if (cached) return { data: cached };
+
             const { monthYear } = input
             const selectedMonth = getMonth(monthYear) + 1 || getMonth(new Date());
             const selectedYear = getYear(monthYear) || getYear(new Date());
@@ -88,13 +103,17 @@ export const budgetService = {
             const totalBudget = dataFix.reduce((sum, itm) => sum + Number(itm.amount), 0)
             const totalSpent = dataFix.reduce((sum, itm) => sum + itm.spended, 0)
             const remaining = Number(totalBudget) - totalSpent
+
+            const result = {
+                budgetData: dataFix,
+                totalSpent,
+                remaining,
+                totalBudget,
+            }
+
+            await ctx.cache.setCache(cacheKey, JSON.stringify(result))
             return {
-                data: {
-                    budgetData: dataFix,
-                    totalSpent,
-                    remaining,
-                    totalBudget,
-                }
+                data: result
             }
         } catch (error) {
             if (error instanceof TRPCError) {
@@ -119,6 +138,9 @@ export const budgetService = {
                     userId: ctx.user!.id
                 }
             })
+
+            await ctx.cache.delCache(budgetCacheKeys.LIST(ctx.user!.id, input.monthYear));
+            await ctx.cache.delCache(budgetCacheKeys.AVAIL_MONTHS(ctx.user!.id));
 
             return {
                 data
@@ -151,6 +173,9 @@ export const budgetService = {
                 }
             })
 
+            await ctx.cache.delCache(budgetCacheKeys.LIST(ctx.user!.id, input.monthYear));
+            await ctx.cache.delCache(budgetCacheKeys.AVAIL_MONTHS(ctx.user!.id));
+
             return {
                 data
             }
@@ -168,12 +193,23 @@ export const budgetService = {
     },
     deleteData: async ({ ctx, input }: { ctx: Context, input: deleteBudgetSchemaType }) => {
         try {
+
+            const target = await ctx.prisma.categoryBudget.findUnique({
+                where: { id: input.id }
+            });
+
             await ctx.prisma.categoryBudget.delete({
                 where: {
                     id: input.id,
                     userId: ctx.user!.id
                 }
             })
+
+            if (target) {
+                const my = `${target.year}-${target.month}`;
+                await ctx.cache.delCache(budgetCacheKeys.LIST(ctx.user!.id, my));
+                await ctx.cache.delCache(budgetCacheKeys.AVAIL_MONTHS(ctx.user!.id));
+            }
 
             return {
                 message: "Data deleted"

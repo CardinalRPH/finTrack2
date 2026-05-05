@@ -2,11 +2,31 @@ import { TRPCError } from "@trpc/server";
 import { Context } from "../context";
 import { getStatisticSchemaType } from "../schemas/statisticSchema";
 import { differenceInDays, eachDayOfInterval, eachMonthOfInterval, endOfDay, format, isSameDay, isSameMonth, sub } from "date-fns";
-import { Decimal } from "../../../generated/prisma/internal/prismaNamespace";
+import { BaseSource, InOutReport, MappedResult, PrismaStat, ResourceItem, StatResult, stsBalanceDTO, stsCashFlowDTO, stsReportDTO, stsSpendingDTO } from "../dto/statisticDTO";
+
+type stsSubKey = "balance" | "cashflow" | "spending" | "report"
+export const getStsCacheKey = (subKey: stsSubKey, userId: string, range: getStatisticSchemaType["range"]) => `stats:${subKey}:${userId}:${range}`;
+
+export const clearAllStatsCache = async (cacheSet: Context["cache"], userId: string) => {
+    const ranges = ['7D', '30D', '6M', '1Y'];
+    const functions = ['balance', 'cashflow', 'spending', 'report'];
+
+    const keys = ranges.flatMap(r =>
+        functions.map(f => getStsCacheKey(f as stsSubKey, userId, r as getStatisticSchemaType["range"]))
+    );
+
+    await Promise.all(keys.map(key => cacheSet.delCache(key)));
+};
 
 export const statisticService = {
     getBalanceSts: async ({ ctx, input }: { ctx: Context, input: getStatisticSchemaType }) => {
+        const cacheKey = getStsCacheKey("balance", ctx.user!.id, input.range);
         try {
+            const cachedData = await ctx.cache.getCache<stsBalanceDTO>(cacheKey);
+            if (cachedData) {
+                return { data: cachedData };
+            }
+
             const { range } = input
             const now = new Date();
             let startDate: Date;
@@ -114,16 +134,19 @@ export const statisticService = {
                 };
             });
 
-            return {
-                data: {
-                    wallet,
-                    aggregate: {
-                        max_income: topIncome,
-                        max_outcome: topOutcome
-                    },
-                    trendData
+            const result = {
+                wallet,
+                aggregate: {
+                    max_income: topIncome,
+                    max_outcome: topOutcome
+                },
+                trendData
+            }
 
-                }
+            await ctx.cache.setCache(cacheKey, JSON.stringify(result))
+
+            return {
+                data: result
             }
         } catch (error) {
             if (error instanceof TRPCError) {
@@ -137,7 +160,14 @@ export const statisticService = {
         }
     },
     getCashflowSts: async ({ ctx, input }: { ctx: Context, input: getStatisticSchemaType }) => {
+        const cacheKey = getStsCacheKey("cashflow", ctx.user!.id, input.range);
         try {
+
+            const cachedData = await ctx.cache.getCache<stsCashFlowDTO>(cacheKey);
+            if (cachedData) {
+                return { data: cachedData };
+            }
+
             const { range } = input
             const now = new Date();
             let startDate: Date;
@@ -254,14 +284,18 @@ export const statisticService = {
                 };
             });
 
+            const result = {
+                totalIncome: ttlIncome,
+                totalOutcome: ttlOutcome,
+                totalNetworth: ttlNet,
+                walletData: ioWalletData,
+                chartData
+            }
+
+            await ctx.cache.setCache(cacheKey, JSON.stringify(result))
+
             return {
-                data: {
-                    totalIncome: ttlIncome,
-                    totalOutcome: ttlOutcome,
-                    totalNetworth: ttlNet,
-                    walletData: ioWalletData,
-                    chartData
-                }
+                data: result
             }
 
         } catch (error) {
@@ -276,7 +310,12 @@ export const statisticService = {
         }
     },
     getSpending: async ({ ctx, input }: { ctx: Context, input: getStatisticSchemaType }) => {
+        const cacheKey = getStsCacheKey("spending", ctx.user!.id, input.range);
         try {
+            const cachedData = await ctx.cache.getCache<stsSpendingDTO>(cacheKey);
+            if (cachedData) {
+                return { data: cachedData };
+            }
             const { range } = input;
             const now = new Date();
             let startDate: Date;
@@ -351,17 +390,21 @@ export const statisticService = {
                     .slice(0, 5);
             };
 
-            return {
-                data: {
-                    byWallet: {
-                        topExpense: getTopFive(walletMapped, 'OUTCOME'),
-                        topIncome: getTopFive(walletMapped, 'INCOME'),
-                    },
-                    byCategory: {
-                        topExpense: getTopFive(categoryMapped, 'OUTCOME'),
-                        topIncome: getTopFive(categoryMapped, 'INCOME'),
-                    }
+            const result = {
+                byWallet: {
+                    topExpense: getTopFive(walletMapped, 'OUTCOME'),
+                    topIncome: getTopFive(walletMapped, 'INCOME'),
+                },
+                byCategory: {
+                    topExpense: getTopFive(categoryMapped, 'OUTCOME'),
+                    topIncome: getTopFive(categoryMapped, 'INCOME'),
                 }
+            }
+
+            await ctx.cache.setCache(cacheKey, JSON.stringify(result))
+
+            return {
+                data: result
             };
 
         } catch (error) {
@@ -376,7 +419,12 @@ export const statisticService = {
         }
     },
     getReport: async ({ ctx, input }: { ctx: Context, input: getStatisticSchemaType }) => {
+        const cacheKey = getStsCacheKey("report", ctx.user!.id, input.range);
         try {
+            const cachedData = await ctx.cache.getCache<stsReportDTO>(cacheKey);
+            if (cachedData) {
+                return { data: cachedData };
+            }
             const { range } = input;
             const now = new Date();
             let startDate: Date;
@@ -476,6 +524,18 @@ export const statisticService = {
                 'categoryId'
             );
 
+            const result = {
+                metrics: {
+                    income: incomeMetrics,
+                    expenses: expenseMetrics,
+                    netCashFlow: incomeMetrics.totalAmount - expenseMetrics.totalAmount
+                },
+                byWallet: reportByWallet,
+                byCategory: reportByCategory
+            }
+
+            await ctx.cache.setCache(cacheKey, JSON.stringify(result))
+
             return {
                 data: {
                     metrics: {
@@ -498,51 +558,4 @@ export const statisticService = {
             })
         }
     }
-}
-
-interface BaseSource {
-    id: string;
-    name: string;
-    color?: string | null;
-    icon?: string | null;
-}
-
-interface PrismaStat {
-    type: "INCOME" | "OUTCOME" | string;
-    _sum: {
-        amount: any;
-    };
-    [key: string]: any;
-}
-
-interface MappedResult {
-    id: string;
-    name: string;
-    color?: string | null;
-    icon?: string | null;
-    type: 'INCOME' | 'OUTCOME';
-    amount: number;
-}
-
-
-// Interface untuk item referensi (Wallet atau Category)
-interface ResourceItem {
-    id: string;
-    name: string;
-}
-
-// Interface untuk data statistik dari Prisma
-interface StatResult {
-    type: string;
-    _sum: {
-        amount: Decimal | number | null;
-    };
-    [key: string]: any; // Mengizinkan akses dinamis ke walletId atau categoryId
-}
-
-// Interface untuk hasil transformasi
-interface InOutReport {
-    name: string;
-    in: number;
-    out: number;
 }

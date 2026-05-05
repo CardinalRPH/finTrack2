@@ -3,6 +3,8 @@ import { Context } from "../context";
 import { createRecordSchemaType, deleteRecordSchemaType, getAllRecordSchemaType, updateRecordSchemaType } from "../schemas/recordSchema";
 import { endOfDay, getMonth, getYear, startOfDay, sub } from "date-fns";
 import { TransactionClient } from "../../../generated/prisma/internal/prismaNamespace";
+import { recordData } from "../dto/recordDTO";
+import { getDashboardCacheKey } from "./dashboardService";
 
 const syncWalletHistory = async (tx: TransactionClient, walletId: string, userId: string, date: Date) => {
     const wallet = await tx.wallet.findUnique({ where: { id: walletId } });
@@ -24,6 +26,25 @@ const syncWalletHistory = async (tx: TransactionClient, walletId: string, userId
         }
     });
 };
+const getRecordCacheKey = {
+    list: (userId: string, range: string, type: string, walletId: string, page: number) =>
+        `records:list:${userId}:${range}:${type || 'all'}:${walletId || 'all'}:${page}`,
+    listPattern: (userId: string) => `records:list:${userId}:*`,
+};
+
+// Fungsi pembersihan cache pusat untuk service ini
+const invalidateRecordCache = async (ctx: Context) => {
+    const userId = ctx.user!.id;
+    // 1. Hapus semua list records (pagination & filter)
+    await ctx.cache.delByPattern(getRecordCacheKey.listPattern(userId));
+
+    // 2. Hapus cache dashboard (karena saldo/cashflow pasti berubah)
+    await ctx.cache.delCache(getDashboardCacheKey(userId));
+
+    // 3. Opsional: Jika ada cache lain seperti total saldo wallet, hapus di sini
+    // await ctx.cache.delCache(`wallets:total:${userId}`);
+};
+
 
 export const recordService = {
     createData: async ({ ctx, data }: { ctx: Context, data: createRecordSchemaType }) => {
@@ -118,10 +139,10 @@ export const recordService = {
                 const currMonth = getMonth(date) + 1
                 const currYear = getYear(date)
 
-                const budgetData = await tx.categoryBudget.findUnique({
+                const budgetData = await tx.categoryBudget.findFirst({
                     where: {
                         userId: ctx.user!.id,
-                        id: finalCategoryId,
+                        categoryId: finalCategoryId,
                         year: currYear,
                         month: currMonth
                     }
@@ -220,6 +241,140 @@ export const recordService = {
                     });
                 }
 
+                // investment update if new data not isInvestment and old data isInvestment
+                if (!data.isInvestment && !data.investmentId && oldRecord.isInvestment && oldRecord.investmentId) {
+                    const investData = await tx.investment.findUnique({
+                        where: {
+                            id: oldRecord.investmentId
+                        }
+                    })
+                    if (!investData) {
+                        throw new TRPCError({ code: "BAD_REQUEST", message: "No invest data founded" });
+                    }
+                    const ttlInvest = Number(investData.totalInvestment) - Number(oldRecord.amount)
+                    await tx.investment.update({
+                        where: { id: investData.id },
+                        data: { totalInvestment: ttlInvest }
+                    });
+                }
+
+                //investment update if new data isInvestment and old data not isInvestment
+                if (data.isInvestment && data.investmentId && !oldRecord.isInvestment && !oldRecord.investmentId) {
+                    const investData = await tx.investment.findUnique({
+                        where: {
+                            id: data.investmentId
+                        }
+                    })
+                    if (!investData) {
+                        throw new TRPCError({ code: "BAD_REQUEST", message: "No invest data founded" });
+                    }
+
+                    const ttlInvest = Number(investData.totalInvestment) + data.amount
+                    await tx.investment.update({
+                        where: { id: investData.id },
+                        data: { totalInvestment: ttlInvest }
+                    });
+
+                }
+
+                // invalidate investment redis
+
+                const oldCurrMonth = getMonth(oldRecord.date) + 1
+                const oldCurrYear = getYear(oldRecord.date)
+                const newCurrMonth = getMonth(oldRecord.date) + 1
+                const newCurrYear = getYear(oldRecord.date)
+
+                const newbudgetData = await tx.categoryBudget.findFirst({
+                    where: {
+                        userId: ctx.user!.id,
+                        categoryId: data.categoryId,
+                        year: newCurrYear,
+                        month: newCurrMonth
+                    }
+                })
+
+                if (newbudgetData) {
+                    // invalidate redis budget
+                }
+
+                // update budget if the budget same but value different
+                if (data.categoryId === oldRecord.categoryId) {
+                    if (oldCurrMonth === newCurrMonth && oldCurrYear === newCurrYear && Number(oldRecord.amount) !== data.amount) {
+                        const budgetData = await tx.categoryBudget.findFirst({
+                            where: {
+                                userId: ctx.user!.id,
+                                categoryId: oldRecord.categoryId,
+                                year: oldCurrYear,
+                                month: oldCurrMonth
+                            }
+                        })
+                        if (!budgetData) {
+                            throw new TRPCError({ code: "BAD_REQUEST", message: "No budget data founded" });
+                        }
+                        const ttlBudget = Number(budgetData.amount) + Number(oldRecord.amount) - data.amount
+                        await tx.categoryBudget.update({
+                            where: {
+                                id: budgetData.id
+                            },
+                            data: {
+                                amount: ttlBudget
+                            }
+                        })
+
+                    }
+                    if (oldCurrMonth !== newCurrMonth || oldCurrYear !== newCurrYear) {
+                        const oldBudgetData = await tx.categoryBudget.findFirst({
+                            where: {
+                                userId: ctx.user!.id,
+                                categoryId: oldRecord.categoryId,
+                                year: oldCurrYear,
+                                month: oldCurrMonth
+                            }
+                        })
+                        if (!oldBudgetData || !newbudgetData) {
+                            throw new TRPCError({ code: "BAD_REQUEST", message: "No budget data founded" });
+                        }
+                        await tx.categoryBudget.update({
+                            where: { id: oldBudgetData.id },
+                            data: {
+                                amount: Number(oldBudgetData.amount) + Number(oldRecord.amount)
+                            }
+                        })
+                        await tx.categoryBudget.update({
+                            where: { id: newbudgetData.id },
+                            data: {
+                                amount: Number(newbudgetData.amount) - data.amount
+                            }
+                        })
+                    }
+                }
+                if (oldRecord.categoryId && data.categoryId && oldRecord.categoryId !== data.categoryId) {
+                    const oldBudgetData = await tx.categoryBudget.findFirst({
+                        where: {
+                            userId: ctx.user!.id,
+                            categoryId: oldRecord.categoryId,
+                            year: oldCurrYear,
+                            month: oldCurrMonth
+                        }
+                    })
+                    if (!oldBudgetData || !newbudgetData) {
+                        throw new TRPCError({ code: "BAD_REQUEST", message: "No budget data founded" });
+                    }
+                    await tx.categoryBudget.update({
+                        where: { id: oldBudgetData.id },
+                        data: {
+                            amount: Number(oldBudgetData.amount) + Number(oldRecord.amount)
+                        }
+                    })
+                    await tx.categoryBudget.update({
+                        where: { id: newbudgetData.id },
+                        data: {
+                            amount: Number(newbudgetData.amount) - data.amount
+                        }
+                    })
+                }
+
+
                 return updatedTransaction;
             });
 
@@ -244,6 +399,7 @@ export const recordService = {
                 });
 
                 if (!transaction) throw new TRPCError({ code: "NOT_FOUND", message: "Transaction not found" });
+                if (!transaction.categoryId) throw new TRPCError({ code: "NOT_FOUND", message: "Transaction category not found" });
 
                 // REVERSE WALLET
                 if (transaction.type === "INCOME") {
@@ -255,6 +411,52 @@ export const recordService = {
                     }
                 }
 
+                if (transaction.isInvestment && transaction.investmentId) {
+                    const investData = await tx.investment.findUnique({
+                        where: {
+                            id: transaction.investmentId
+                        }
+                    })
+                    if (!investData) {
+                        throw new TRPCError({ code: "BAD_REQUEST", message: "No invest data founded" });
+                    }
+                    const ttlInvest = Number(investData.totalInvestment) - Number(transaction.amount)
+                    await tx.investment.update({
+                        where: {
+                            id: investData.id
+                        },
+                        data: {
+                            totalInvestment: ttlInvest
+                        }
+                    })
+
+                }
+
+                const currMonth = getMonth(transaction.date) + 1
+                const currYear = getYear(transaction.date)
+
+                const budgetData = await tx.categoryBudget.findFirst({
+                    where: {
+                        categoryId: transaction.categoryId,
+                        year: currYear,
+                        month: currMonth
+                    }
+                })
+
+                if (budgetData) {
+                    const budValue = Number(budgetData.amount) + Number(transaction.amount)
+                    await tx.categoryBudget.update({
+                        where: {
+                            id: budgetData.id
+                        },
+                        data: {
+                            amount: budValue
+                        }
+                    })
+                }
+
+                // invalidate redis cache
+
                 await tx.transaction.delete({ where: { id: input.id } });
 
                 await syncWalletHistory(tx, transaction.walletId, ctx.user!.id, transaction.date);
@@ -262,6 +464,7 @@ export const recordService = {
                     await syncWalletHistory(tx, transaction.toWalletId, ctx.user!.id, transaction.date);
                 }
             });
+
 
             return { message: "Data deleted" };
         } catch (error) {
@@ -279,6 +482,8 @@ export const recordService = {
     getAllData: async ({ ctx, input }: { ctx: Context, input: getAllRecordSchemaType }) => {
         try {
             const { range, type, walletId, page } = input;
+
+
             const limit = 20;
             const skip = (page - 1) * limit;
 
@@ -321,7 +526,7 @@ export const recordService = {
 
             ]);
 
-            return {
+            const result = {
                 data,
                 pagination: {
                     page,
@@ -330,7 +535,9 @@ export const recordService = {
                     totalPages: Math.ceil(total / limit),
                     hasNext: data.length === limit,
                 }
-            };
+            }
+
+            return result
         } catch (error) {
             if (error instanceof TRPCError) {
                 throw error

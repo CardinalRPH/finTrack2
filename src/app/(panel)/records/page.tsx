@@ -23,6 +23,7 @@ import { useGetWallet } from '@/hooks/walletHook';
 import { useGetCategory } from '@/hooks/categoryHook';
 import getVisiblePages from '@/utils/getVisiblePage';
 import { useGetInvest } from '@/hooks/investHook';
+import { RecordSkeleton } from './components/Skeleton';
 
 
 
@@ -176,6 +177,8 @@ export default function RecordsPage() {
             showToast("Record Deleted", "success")
         }
     }, [createScss, updateScss, deleteScss])
+
+    if (isLoading) return <RecordSkeleton />
 
     return (
         <div className="pb-24">

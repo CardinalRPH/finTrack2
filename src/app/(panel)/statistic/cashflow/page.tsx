@@ -13,6 +13,7 @@ import { getStatisticSchemaType } from '@/server/schemas/statisticSchema'
 import { useGetCashFlow } from '@/hooks/statisticHook'
 import { formatToRupiah } from '@/utils/fomatCurrency'
 import ErrorModal from '../../components/ErrorModal'
+import { CashFlowSkeleton } from './components/Skeleton'
 
 
 export default function CashFlowPage() {
@@ -28,6 +29,9 @@ export default function CashFlowPage() {
             setErrMsg(getErrMsg.message)
         }
     }, [getErr])
+
+    if (isLoading) return <CashFlowSkeleton />
+    
     return (
         <div className="space-y-8 pb-10">
             {/* 1. Filter & Header */}

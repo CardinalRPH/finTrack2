@@ -20,6 +20,7 @@ import { CategoryBudgetCard } from "./components/BudgetCard";
 import BudgetModal from "./components/BudgetModal";
 import { BudgetStatCard } from "./components/BudgetStatCard";
 import { formatToRupiah } from "@/utils/fomatCurrency";
+import { BudgetSkeleton } from "./components/Skeleton";
 
 
 const calculatePercentage = (value: number, limit: number) => {
@@ -134,7 +135,7 @@ export default function BudgetPage() {
     }, [createScss, updateScss, deleteScss])
 
 
-
+    if (isLoading) return <BudgetSkeleton />
 
     return (
         <div className="min-h-screen bg-slate-950 text-slate-200 p-4 md:p-8 pb-24">
