@@ -1,15 +1,31 @@
 "use client"
 
-import React, { useState } from 'react'
+import { useGetReport } from '@/hooks/statisticHook'
+import { getStatisticSchemaType } from '@/server/schemas/statisticSchema'
+import { useEffect, useState } from 'react'
 import {
     HiOutlineDocumentChartBar,
     HiOutlineArrowDownTray,
     HiOutlineWallet,
     HiOutlineTag
 } from "react-icons/hi2"
+import ErrorModal from '../../components/ErrorModal'
+import { formatToRupiah } from '@/utils/fomatCurrency'
 
 export default function ReportsPage() {
-    const [timeRange, setTimeRange] = useState('30D')
+    const ranges = ['7D', '30D', '12W', '6M', '1Y']
+    const [timeRange, setTimeRange] = useState<getStatisticSchemaType["range"]>('30D')
+    const [isErrMdOpen, setErrMdOpen] = useState(false)
+    const [errMsg, setErrMsg] = useState<string | null>(null)
+
+    const { data, isLoading, error: getErrMsg, isError: getErr } = useGetReport({ filter: { range: timeRange } })
+
+    useEffect(() => {
+        if (getErr) {
+            setErrMdOpen(getErr)
+            setErrMsg(getErrMsg.message)
+        }
+    }, [getErr])
 
     return (
         <div className="space-y-8 pb-16">
@@ -21,10 +37,10 @@ export default function ReportsPage() {
                 </div>
                 <div className="flex items-center gap-3">
                     <div className="flex bg-slate-900 p-1 rounded-xl border border-slate-800">
-                        {['7D', '30D', '12W', '6M', '1Y'].map((range) => (
+                        {ranges.map((range) => (
                             <button
                                 key={range}
-                                onClick={() => setTimeRange(range)}
+                                onClick={() => setTimeRange(range as getStatisticSchemaType["range"])}
                                 className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${timeRange === range ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
                             >
                                 {range}
@@ -54,23 +70,23 @@ export default function ReportsPage() {
                         <tbody className="divide-y divide-slate-800/50">
                             <tr className="hover:bg-slate-800/20 transition-colors">
                                 <td className="px-8 py-4 text-sm font-medium text-slate-400">Transaction Count</td>
-                                <td className="px-8 py-4 font-bold">12 Records</td>
-                                <td className="px-8 py-4 font-bold">48 Records</td>
+                                <td className="px-8 py-4 font-bold">{data?.data.metrics.income.count} Records</td>
+                                <td className="px-8 py-4 font-bold">{data?.data.metrics.expenses.count} Records</td>
                             </tr>
                             <tr className="hover:bg-slate-800/20 transition-colors">
                                 <td className="px-8 py-4 text-sm font-medium text-slate-400">Average (per Day)</td>
-                                <td className="px-8 py-4 font-bold text-emerald-400">Rp 450.000</td>
-                                <td className="px-8 py-4 font-bold text-rose-400">Rp 120.000</td>
+                                <td className="px-8 py-4 font-bold text-emerald-400">{formatToRupiah(data?.data.metrics.income.averagePerDay)}</td>
+                                <td className="px-8 py-4 font-bold text-rose-400">{formatToRupiah(data?.data.metrics.expenses.averagePerDay)}</td>
                             </tr>
                             <tr className="hover:bg-slate-800/20 transition-colors">
                                 <td className="px-8 py-4 text-sm font-medium text-slate-400">Average (per Record)</td>
-                                <td className="px-8 py-4 font-bold text-emerald-400">Rp 1.125.000</td>
-                                <td className="px-8 py-4 font-bold text-rose-400">Rp 75.000</td>
+                                <td className="px-8 py-4 font-bold text-emerald-400">{formatToRupiah(data?.data.metrics.income.averagePerRecord)}</td>
+                                <td className="px-8 py-4 font-bold text-rose-400">{formatToRupiah(data?.data.metrics.expenses.averagePerRecord)}</td>
                             </tr>
                             <tr className="bg-slate-950/50">
                                 <td className="px-8 py-5 text-sm font-black text-white uppercase">Total Amount</td>
-                                <td className="px-8 py-5 text-xl font-black text-emerald-400">Rp 13.500.000</td>
-                                <td className="px-8 py-5 text-xl font-black text-rose-400">Rp 3.600.000</td>
+                                <td className="px-8 py-5 text-xl font-black text-emerald-400">{formatToRupiah(data?.data.metrics.income.totalAmount)}</td>
+                                <td className="px-8 py-5 text-xl font-black text-rose-400">{formatToRupiah(data?.data.metrics.expenses.totalAmount)}</td>
                             </tr>
                         </tbody>
                     </table>
@@ -78,7 +94,7 @@ export default function ReportsPage() {
                 {/* Total Cash Flow Banner */}
                 <div className="bg-indigo-600 p-6 flex justify-between items-center">
                     <span className="font-black uppercase tracking-tighter text-white/80">Total Net Cash Flow</span>
-                    <span className="text-2xl font-black text-white">Rp 9.900.000</span>
+                    <span className="text-2xl font-black text-white">{formatToRupiah(data?.data.metrics.netCashFlow)}</span>
                 </div>
             </div>
 
@@ -97,21 +113,13 @@ export default function ReportsPage() {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-800/50 text-sm">
-                            <tr className="hover:bg-slate-800/20">
-                                <td className="px-6 py-4 font-bold">Main Bank</td>
-                                <td className="px-6 py-4 text-emerald-500">10.0M</td>
-                                <td className="px-6 py-4 text-rose-500 text-right">2.5M</td>
-                            </tr>
-                            <tr className="hover:bg-slate-800/20">
-                                <td className="px-6 py-4 font-bold">Digital Pay</td>
-                                <td className="px-6 py-4 text-emerald-500">3.5M</td>
-                                <td className="px-6 py-4 text-rose-500 text-right">0.8M</td>
-                            </tr>
-                            <tr className="hover:bg-slate-800/20">
-                                <td className="px-6 py-4 font-bold">Cash</td>
-                                <td className="px-6 py-4 text-emerald-500">0.0</td>
-                                <td className="px-6 py-4 text-rose-500 text-right">0.3M</td>
-                            </tr>
+                            {data && data.data.byWallet.map((value, index) => (
+                                <tr className="hover:bg-slate-800/20" key={`byWallet-${index}`}>
+                                    <td className="px-6 py-4 font-bold">{value.name}</td>
+                                    <td className="px-6 py-4 text-emerald-500">{formatToRupiah(value.in)}</td>
+                                    <td className="px-6 py-4 text-rose-500 text-right">{formatToRupiah(value.out)}</td>
+                                </tr>
+                            ))}
                         </tbody>
                     </table>
                 </div>
@@ -130,25 +138,18 @@ export default function ReportsPage() {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-800/50 text-sm">
-                            <tr className="hover:bg-slate-800/20">
-                                <td className="px-6 py-4 font-bold">Salary</td>
-                                <td className="px-6 py-4 text-emerald-500">13.5M</td>
-                                <td className="px-6 py-4 text-rose-500 text-right">0</td>
-                            </tr>
-                            <tr className="hover:bg-slate-800/20">
-                                <td className="px-6 py-4 font-bold">Food</td>
-                                <td className="px-6 py-4 text-emerald-500">0</td>
-                                <td className="px-6 py-4 text-rose-500 text-right">1.2M</td>
-                            </tr>
-                            <tr className="hover:bg-slate-800/20">
-                                <td className="px-6 py-4 font-bold">Gold Invest</td>
-                                <td className="px-6 py-4 text-emerald-500">0</td>
-                                <td className="px-6 py-4 text-rose-500 text-right">2.0M</td>
-                            </tr>
+                            {data && data.data.byCategory.map((value, index) => (
+                                <tr className="hover:bg-slate-800/20" key={`byCategory-${index}`}>
+                                    <td className="px-6 py-4 font-bold">{value.name}</td>
+                                    <td className="px-6 py-4 text-emerald-500">{formatToRupiah(value.in)}</td>
+                                    <td className="px-6 py-4 text-rose-500 text-right">{formatToRupiah(value.out)}</td>
+                                </tr>
+                            ))}
                         </tbody>
                     </table>
                 </div>
             </div>
+            <ErrorModal isOpen={isErrMdOpen} onClose={() => setErrMdOpen(false)} message={errMsg || ""} />
         </div>
     )
 }

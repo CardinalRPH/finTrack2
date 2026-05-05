@@ -177,8 +177,8 @@ export default function InvestmentPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 ">
                 <div className="bg-slate-900 border  border-slate-800 p-8 rounded-[3rem]">
                     <h3 className="text-xl font-black text-white mb-6">Asset Distribution</h3>
-                    <div className="h-72 w-full">
-                        <ResponsiveContainer width="100%" height="100%">
+                    <div className="h-72 w-full flex-1">
+                        <ResponsiveContainer width="100%" height={300}>
                             <PieChart>
                                 <Pie
                                     data={data?.data.graph.chartData}
@@ -212,8 +212,8 @@ export default function InvestmentPage() {
                         <h3 className="text-xl font-black text-white">Investment Trend</h3>
                         <p className="text-xs text-slate-500 font-medium">Accumulated purchase value for {selectedYear}</p>
                     </div>
-                    <div className="h-72 w-full">
-                        <ResponsiveContainer width="100%" height="100%">
+                    <div className="h-72 w-full flex-1">
+                        <ResponsiveContainer width="100%" height={300}>
                             <LineChart data={data?.data.graph.lineData}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
                                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 11 }} dy={10} />
