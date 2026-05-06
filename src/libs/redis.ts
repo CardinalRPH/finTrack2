@@ -48,7 +48,7 @@ export const delByPattern = (pattern: string): Promise<void> => {
                 const pipeline = redis.pipeline();
 
                 keys.forEach((key) => {
-                    pipeline.del(key);
+                    pipeline.unlink(key);
                 });
 
                 stream.pause();

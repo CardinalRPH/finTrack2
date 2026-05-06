@@ -13,6 +13,7 @@ import ErrorModal from '../components/ErrorModal'
 import { useSnackbar } from '@/stores/toastStore'
 import ConfirmModal from '../components/DialogModal'
 import { categoryDTO } from '@/server/dto/categoryDTO'
+import { CategorySkeleton } from './components/Skeleton'
 
 
 export default function CategoriesPage() {
@@ -107,6 +108,8 @@ export default function CategoriesPage() {
             showToast("Category Deleted", "success")
         }
     }, [createScss, updateScss, deleteScss])
+
+    if (isLoading) return <CategorySkeleton />
 
     return (
         <div className="space-y-6">
