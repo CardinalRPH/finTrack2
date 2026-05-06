@@ -7,6 +7,7 @@ import { budgetListDTO, budgetMonthYearDTO } from "../dto/budgetDTO";
 export const budgetCacheKeys = {
     AVAIL_MONTHS: (userId: string) => `budget:avail:${userId}`,
     LIST: (userId: string, monthYear: string) => `budget:list:${userId}:${monthYear}`,
+    LIST_PATTERN: (userId: string) => `budget:list:${userId}:*`,
 };
 
 export const budgetService = {

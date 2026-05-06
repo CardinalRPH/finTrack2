@@ -5,10 +5,11 @@ import { endOfYear, startOfYear } from "date-fns";
 import { investAvaiYear, investDashboardDTO, investDataDTO } from "../dto/investDTO";
 
 const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-const getInvestCacheKey = {
+export const getInvestCacheKey = {
     data: (userId: string) => `investment:${userId}`,
     dashboard: (userId: string, year: number) => `investment:dashboard:${userId}:${year}`,
     year: (userId: string) => `investment:year:${userId}`,
+    dashboardPattern: (userId: string) => `investment:dashboard:${userId}:*`,
 }
 export const investService = {
     createData: async ({ ctx, input }: { ctx: Context, input: investCreateSchemaType }) => {

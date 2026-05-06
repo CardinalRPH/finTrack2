@@ -5,10 +5,15 @@ import { endOfDay, getMonth, getYear, startOfDay, sub } from "date-fns";
 import { TransactionClient } from "../../../generated/prisma/internal/prismaNamespace";
 import { recordData } from "../dto/recordDTO";
 import { getDashboardCacheKey } from "./dashboardService";
+import { clearAllStatsCache } from "./statisticService";
+import { getInvestCacheKey } from "./investService";
+import { budgetCacheKeys } from "./budgetService";
 
 const syncWalletHistory = async (tx: TransactionClient, walletId: string, userId: string, date: Date) => {
     const wallet = await tx.wallet.findUnique({ where: { id: walletId } });
     if (!wallet) return;
+
+    //invalidate wallet redis
 
     const historyDate = new Date(date);
     historyDate.setHours(0, 0, 0, 0);
@@ -31,20 +36,6 @@ const getRecordCacheKey = {
         `records:list:${userId}:${range}:${type || 'all'}:${walletId || 'all'}:${page}`,
     listPattern: (userId: string) => `records:list:${userId}:*`,
 };
-
-// Fungsi pembersihan cache pusat untuk service ini
-const invalidateRecordCache = async (ctx: Context) => {
-    const userId = ctx.user!.id;
-    // 1. Hapus semua list records (pagination & filter)
-    await ctx.cache.delByPattern(getRecordCacheKey.listPattern(userId));
-
-    // 2. Hapus cache dashboard (karena saldo/cashflow pasti berubah)
-    await ctx.cache.delCache(getDashboardCacheKey(userId));
-
-    // 3. Opsional: Jika ada cache lain seperti total saldo wallet, hapus di sini
-    // await ctx.cache.delCache(`wallets:total:${userId}`);
-};
-
 
 export const recordService = {
     createData: async ({ ctx, data }: { ctx: Context, data: createRecordSchemaType }) => {
@@ -125,7 +116,6 @@ export const recordService = {
                 // 4. LOGIKA INVESTMENT (Price Shifting)
                 // Di dalam Prisma Transaction saat membuat record baru
                 if (isInvestment && investmentId) {
-
                     await tx.investment.update({
                         where: { id: investmentId, userId: ctx.user!.id },
                         data: {
@@ -134,6 +124,10 @@ export const recordService = {
                             }
                         }
                     });
+                    // invalidate budget invest
+                    await ctx.cache.delCache(getInvestCacheKey.data(ctx.user!.id))
+                    await ctx.cache.delCache(getInvestCacheKey.year(ctx.user!.id))
+                    await ctx.cache.delByPattern(getInvestCacheKey.dashboardPattern(ctx.user!.id))
                 }
 
                 const currMonth = getMonth(date) + 1
@@ -157,10 +151,20 @@ export const recordService = {
                             amount: Number(budgetData.amount) - amount
                         }
                     })
+                    // invalidate budget redis
+                    await ctx.cache.delByPattern(budgetCacheKeys.LIST_PATTERN(ctx.user!.id))
+                    await ctx.cache.delCache(budgetCacheKeys.AVAIL_MONTHS(ctx.user!.id))
                 }
 
                 return transaction;
             });
+
+            //invalidate record redis
+            await ctx.cache.delByPattern(getRecordCacheKey.listPattern(ctx.user!.id));
+            //invalidate stats redis
+            await clearAllStatsCache(ctx.cache, ctx.user!.id)
+            //invalidate dashboard redis
+            await ctx.cache.delCache(getDashboardCacheKey(ctx.user!.id))
 
             return { data: created };
         } catch (error) {
@@ -225,7 +229,7 @@ export const recordService = {
                 }
 
                 // Investment Price Update (Optional: Only if price changed)
-                if (data.isInvestment && data.investmentId) {
+                if (data.isInvestment && data.investmentId && data.investmentId === oldRecord.investmentId) {
                     const investData = await tx.investment.findUnique({
                         where: {
                             id: data.investmentId
@@ -278,6 +282,9 @@ export const recordService = {
                 }
 
                 // invalidate investment redis
+                await ctx.cache.delCache(getInvestCacheKey.data(ctx.user!.id))
+                await ctx.cache.delCache(getInvestCacheKey.year(ctx.user!.id))
+                await ctx.cache.delByPattern(getInvestCacheKey.dashboardPattern(ctx.user!.id))
 
                 const oldCurrMonth = getMonth(oldRecord.date) + 1
                 const oldCurrYear = getYear(oldRecord.date)
@@ -292,10 +299,6 @@ export const recordService = {
                         month: newCurrMonth
                     }
                 })
-
-                if (newbudgetData) {
-                    // invalidate redis budget
-                }
 
                 // update budget if the budget same but value different
                 if (data.categoryId === oldRecord.categoryId) {
@@ -320,6 +323,9 @@ export const recordService = {
                                 amount: ttlBudget
                             }
                         })
+                        //invalidate budget redis
+                        await ctx.cache.delByPattern(budgetCacheKeys.LIST_PATTERN(ctx.user!.id))
+                        await ctx.cache.delCache(budgetCacheKeys.AVAIL_MONTHS(ctx.user!.id))
 
                     }
                     if (oldCurrMonth !== newCurrMonth || oldCurrYear !== newCurrYear) {
@@ -346,6 +352,9 @@ export const recordService = {
                                 amount: Number(newbudgetData.amount) - data.amount
                             }
                         })
+                        //invalidate budget redis
+                        await ctx.cache.delByPattern(budgetCacheKeys.LIST_PATTERN(ctx.user!.id))
+                        await ctx.cache.delCache(budgetCacheKeys.AVAIL_MONTHS(ctx.user!.id))
                     }
                 }
                 if (oldRecord.categoryId && data.categoryId && oldRecord.categoryId !== data.categoryId) {
@@ -372,11 +381,22 @@ export const recordService = {
                             amount: Number(newbudgetData.amount) - data.amount
                         }
                     })
+                    //invalidate budget redis
+                    await ctx.cache.delByPattern(budgetCacheKeys.LIST_PATTERN(ctx.user!.id))
+                    await ctx.cache.delCache(budgetCacheKeys.AVAIL_MONTHS(ctx.user!.id))
                 }
 
 
                 return updatedTransaction;
             });
+
+
+            //invalidate record redis
+            await ctx.cache.delByPattern(getRecordCacheKey.listPattern(ctx.user!.id));
+            //invalidate stats redis
+            await clearAllStatsCache(ctx.cache, ctx.user!.id)
+            //invalidate dashboard redis
+            await ctx.cache.delCache(getDashboardCacheKey(ctx.user!.id))
 
             return { data: updated };
         } catch (error) {
@@ -430,6 +450,11 @@ export const recordService = {
                         }
                     })
 
+                    // invalidate budget invest
+                    await ctx.cache.delCache(getInvestCacheKey.data(ctx.user!.id))
+                    await ctx.cache.delCache(getInvestCacheKey.year(ctx.user!.id))
+                    await ctx.cache.delByPattern(getInvestCacheKey.dashboardPattern(ctx.user!.id))
+
                 }
 
                 const currMonth = getMonth(transaction.date) + 1
@@ -453,9 +478,17 @@ export const recordService = {
                             amount: budValue
                         }
                     })
+                    // invalidate budget redis
+                    await ctx.cache.delByPattern(budgetCacheKeys.LIST_PATTERN(ctx.user!.id))
+                    await ctx.cache.delCache(budgetCacheKeys.AVAIL_MONTHS(ctx.user!.id))
                 }
 
-                // invalidate redis cache
+                // invalidate record cache
+                await ctx.cache.delByPattern(getRecordCacheKey.listPattern(ctx.user!.id));
+                //invalidate stats redis
+                await clearAllStatsCache(ctx.cache, ctx.user!.id)
+                //invalidate dashboard redis
+                await ctx.cache.delCache(getDashboardCacheKey(ctx.user!.id))
 
                 await tx.transaction.delete({ where: { id: input.id } });
 
