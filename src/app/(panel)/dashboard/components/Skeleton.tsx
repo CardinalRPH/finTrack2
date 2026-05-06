@@ -40,20 +40,24 @@ const StatCardSkeleton = () => (
     </div>
 );
 
-const GraphSkeleton = ({ title }: { title: string }) => (
-    <div className="bg-slate-900/50 border border-slate-800 p-6 rounded-3xl animate-pulse">
-        <div className="w-48 h-6 bg-slate-800 rounded mb-6" />
-        <div className="w-full h-75 bg-slate-800/50 rounded-2xl flex items-end p-4 gap-2">
-            {[...Array(12)].map((_, i) => (
-                <div
-                    key={i}
-                    className="flex-1 bg-slate-800 rounded-t"
-                    style={{ height: `${Math.random() * 60 + 20}%` }}
-                />
-            ))}
+const GraphSkeleton = ({ title }: { title: string }) => {
+    const heights = [40, 70, 45, 90, 65, 30, 80, 55, 20, 75, 50, 85];
+
+    return (
+        <div className="bg-slate-900/50 border border-slate-800 p-6 rounded-3xl animate-pulse">
+            <div className="w-48 h-6 bg-slate-800 rounded mb-6" />
+            <div className="w-full h-75 bg-slate-800/50 rounded-2xl flex items-end p-4 gap-2">
+                {heights.map((h, i) => (
+                    <div
+                        key={i}
+                        className="flex-1 bg-slate-800 rounded-t"
+                        style={{ height: `${h}%` }} // Menggunakan nilai dari array
+                    />
+                ))}
+            </div>
         </div>
-    </div>
-);
+    );
+};
 
 const TransactionListSkeleton = () => (
     <div className="bg-slate-900/50 border border-slate-800 p-6 rounded-3xl animate-pulse">

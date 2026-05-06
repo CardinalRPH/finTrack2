@@ -1,3 +1,5 @@
+"use client"
+
 import { ReactNode } from "react"
 
 const StatCard = ({ title, value, trend, icon, color }: {
