@@ -9,7 +9,7 @@ import { clearAllStatsCache } from "./statisticService";
 import { getInvestCacheKey } from "./investService";
 import { budgetCacheKeys } from "./budgetService";
 
-const syncWalletHistory = async (tx: TransactionClient, walletId: string, userId: string, date: Date) => {
+export const syncWalletHistory = async (tx: TransactionClient, walletId: string, userId: string, date: Date) => {
     const wallet = await tx.wallet.findUnique({ where: { id: walletId } });
     if (!wallet) return;
 

@@ -23,6 +23,9 @@ const envSchema = z.object({
     REDIS_PORT: z.coerce.number(),
     REDIS_PASSWORD: z.string(),
     REDIS_KEY: z.string(),
+
+    DISCORD_BOT_SECRET: z.string(),
+    GEMINI_API_KEY: z.string()
 })
 
 const processEnv = envSchema.parse(process.env)

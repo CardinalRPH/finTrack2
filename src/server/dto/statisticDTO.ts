@@ -3,7 +3,7 @@ import { walletDTO } from "./walletDTO";
 import { WalletType } from "../../../generated/prisma/enums";
 
 export type stsBalanceDTO = {
-    wallet: Omit<walletDTO, "id">,
+    wallet: Omit<walletDTO, "id">[],
     aggregate: {
         max_income: {
             amount: Decimal | string;
