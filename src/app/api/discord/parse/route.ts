@@ -40,7 +40,7 @@ export const POST = async (req: Request) => {
         }
         const { text } = validation.data
 
-        const [wallets, categories] = await Promise.all([
+        const [wallets, categories, investment] = await Promise.all([
             prisma.wallet.findMany({
                 where: {
                     userId: user.userId
@@ -58,23 +58,38 @@ export const POST = async (req: Request) => {
                     id: true,
                     name: true
                 }
+            }),
+            prisma.investment.findMany({
+                where: {
+                    userId: user.userId
+                },
+                select: {
+                    id: true,
+                    assetName: true,
+                }
             })
         ])
 
         const prompt = `
-        Context: Wallet=${JSON.stringify(wallets)}, Category=${JSON.stringify(categories)}, Now=${new Date().toISOString()}
+        Context: Wallet=${JSON.stringify(wallets)}, Category=${JSON.stringify(categories)}, Now=${new Date().toISOString()}, Investment=${JSON.stringify(investment)}
         Input: "${text}"
 
         Output JSON Rules:
-        1. Fields: type(INCOME|EXPENSE|TRANSFER), amount(num), walletId(str), date(ISO), isInvestment(bool), categoryId(str?), description(str?), toWalletId(str?).
+        1. Fields: type(INCOME|OUTCOME|TRANSFER), amount(num), walletId(str), date(ISO), isInvestment(bool), categoryId(str?), description(str?), toWalletId(str?), investmentId(str?).
         2. Strict: walletId & categoryId MUST exist in Context. If not found, return {"error": "NOT_FOUND"}.
         3. Description: Short summary.
         `;
 
 
 
-        const result = await parserModel.generateContent(prompt)
+        const result = await parserModel.generateContent({
+            contents: [{ role: "user", parts: [{ text: prompt }] }],
+            generationConfig: {
+                responseMimeType: "application/json",
+            },
+        });
         const responseText = result.response.text()
+        console.log(responseText)
         const rawJson = JSON.parse(responseText)
 
         if (rawJson.error === "NOT_FOUND") {
@@ -91,22 +106,26 @@ export const POST = async (req: Request) => {
             }, { status: 422 });
         }
 
-
+        console.log({
+            ...rawJson,
+            date: new Date(rawJson.date),
+            userId: user.userId
+        })
+        
         const validateData = createRecordSchemaExtend.safeParse({
             ...rawJson,
             date: new Date(rawJson.date),
             userId: user.userId
         })
 
-        console.log({
-            ...rawJson,
-            date: new Date(rawJson.date),
-            userId: user.userId
-        })
+
+
+
         if (!validateData.success) {
             return NextResponse.json({
                 success: false,
-                error: "Invalid AI data:"
+                error: "Invalid AI data",
+                cause:validateData.error.message
             }, { status: 422 });
         }
 
