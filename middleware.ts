@@ -11,7 +11,7 @@ export async function middleware(req: NextRequest) {
         {
             const apiKey = req.headers.get("x-api-key")
             const discordId = req.headers.get("x-discord-id")
-            const secretKey = processEnv.DISCORD_BOT_SECRET
+            const secretKey = processEnv.DISCORD_BOT_KEY
 
             if (!apiKey || apiKey !== secretKey) {
                 return new NextResponse(

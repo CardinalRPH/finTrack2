@@ -24,7 +24,7 @@ const envSchema = z.object({
     REDIS_PASSWORD: z.string(),
     REDIS_KEY: z.string(),
 
-    DISCORD_BOT_SECRET: z.string(),
+    DISCORD_BOT_KEY: z.string(),
     GEMINI_API_KEY: z.string()
 })
 
