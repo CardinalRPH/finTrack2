@@ -31,7 +31,7 @@ export const syncWalletHistory = async (tx: TransactionClient, walletId: string,
         }
     });
 };
-const getRecordCacheKey = {
+export const getRecordCacheKey = {
     list: (userId: string, range: string, type: string, walletId: string, page: number) =>
         `records:list:${userId}:${range}:${type || 'all'}:${walletId || 'all'}:${page}`,
     listPattern: (userId: string) => `records:list:${userId}:*`,

@@ -1,28 +1,36 @@
-interface Transaction {
+import { EntryType, WalletType } from "../../../../generated/prisma/enums";
+
+export interface Transaction {
     data: {
-        id: string
-        type: 'INCOME' | 'OUTCOME' | 'TRANSFER'
-        amount: number | any // Decimal dari Prisma biasanya terbaca number/string di FE
-        walletId: string
-        toWalletId?: string | null
-        categoryId?: string | null
-        category?: {
-            name: string
-            icon: string
-            color: string
-        } | null
         wallet: {
+            type: WalletType;
             name: string;
-            type: string; // Tambahkan type sesuai response
-        }
-        toWallet?: { name: string } | null
-        date: Date | string // Prisma mengembalikan Date object
-        createdAt: Date | string
-        description: string | null
-        isInvestment: boolean
-        gramAmount?: number | any | null
-        buyPrice?: number | any | null
-        sellPrice?: number | any | null
+        };
+        category: {
+            name: string;
+            icon: string;
+            color: string;
+        } | null;
+        toWallet: {
+            name: string;
+        } | null;
+        investment: {
+            assetName: string;
+        } | null;
+    } & {
+        type: EntryType;
+        date: string;
+        isInvestment: boolean;
+        categoryId: string | null;
+        investmentId: string | null;
+        toWalletId: string | null;
+        amount: string | number;
+        walletId: string;
+        description: string | null;
+        id: string;
+        createdAt: string;
+        updatedAt: string;
+        userId: string;
     },
     pagination: {
         page: number,

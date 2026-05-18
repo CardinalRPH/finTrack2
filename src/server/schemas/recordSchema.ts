@@ -1,21 +1,46 @@
 import z from "zod";
-import { EntryType } from "../../../generated/prisma/enums";
 
-export const createRecordSchema = z.object({
-    type: z.enum(EntryType),
+const baseRecordSchema = {
     amount: z.number().positive("Nominal harus lebih dari 0"),
     walletId: z.string().min(1, "Dompet asal wajib dipilih"),
-    categoryId: z.string().optional(), // Bisa opsional karena nanti dicover otomatis jika investasi
     date: z.coerce.date(),
     description: z.string().optional(),
+};
 
-    // Field Transfer
-    toWalletId: z.string().optional(),
-
-    // Field Investasi
-    isInvestment: z.boolean().default(false),
-    investmentId: z.string().nullable().optional(), // Link ke ID tabel Investment
-})
+export const createRecordSchema = z.discriminatedUnion("type", [
+    z.object({
+        ...baseRecordSchema,
+        type: z.literal("OUTCOME"),
+        isInvestment: z.literal(false).default(false),
+        categoryId: z.string().min(1, "Kategori wajib diisi untuk pengeluaran non-investasi"),
+        investmentId: z.undefined().describe("Investment ID harus kosong jika bukan investasi"),
+        toWalletId: z.undefined().describe("Transfer bank tujuan harus kosong untuk outcome"),
+    }),
+    z.object({
+        ...baseRecordSchema,
+        type: z.literal("OUTCOME"),
+        isInvestment: z.literal(true),
+        investmentId: z.string().min(1, "Investment ID wajib diisi untuk pengeluaran investasi"),
+        categoryId: z.undefined().describe("Category harus kosong jika berinvestasi"),
+        toWalletId: z.undefined().describe("Transfer bank tujuan harus kosong untuk outcome"),
+    }),
+    z.object({
+        ...baseRecordSchema,
+        type: z.literal("INCOME"),
+        categoryId: z.undefined(),
+        isInvestment: z.literal(false).default(false),
+        investmentId: z.undefined(),
+        toWalletId: z.undefined(),
+    }),
+    z.object({
+        ...baseRecordSchema,
+        type: z.literal("TRANSFER"),
+        categoryId: z.undefined(),
+        toWalletId: z.string().min(1, "Dompet tujuan wajib dipilih untuk transfer"),
+        isInvestment: z.literal(false).default(false),
+        investmentId: z.undefined(),
+    }),
+]);
 
 export type createRecordSchemaType = z.infer<typeof createRecordSchema>
 export type CreateRecordFormInput = z.input<typeof createRecordSchema>

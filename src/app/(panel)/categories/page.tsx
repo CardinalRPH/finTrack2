@@ -124,12 +124,16 @@ export default function CategoriesPage() {
                         </div>
 
                         <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button onClick={() => openModal(cat)} className="p-2 hover:bg-slate-800 rounded-xl text-slate-400 hover:text-white">
-                                <HiOutlinePencil size={18} />
-                            </button>
-                            <button onClick={() => handleDelete(cat.id)} className="p-2 hover:bg-rose-500/10 rounded-xl text-slate-400 hover:text-rose-500">
-                                <HiOutlineTrash size={18} />
-                            </button>
+                            {!cat.name.includes("CTX.Invest") ? !cat.name.includes("CTX.Invest") ? (
+                                <>
+                                    <button onClick={() => openModal(cat)} className="p-2 hover:bg-slate-800 rounded-xl text-slate-400 hover:text-white">
+                                        <HiOutlinePencil size={18} />
+                                    </button>
+                                    <button onClick={() => handleDelete(cat.id)} className="p-2 hover:bg-rose-500/10 rounded-xl text-slate-400 hover:text-rose-500">
+                                        <HiOutlineTrash size={18} />
+                                    </button>
+                                </>
+                            ) : "" : ""}
                         </div>
                     </div>
                 ))}

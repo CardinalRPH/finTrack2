@@ -137,7 +137,7 @@ export default function RecordModal({
                                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 outline-none focus:border-indigo-500 disabled:opacity-50"
                                 >
                                     <option value="">{isInvestment ? 'Investment (Auto)' : 'Select Category...'}</option>
-                                    {categories.map((c) => (
+                                    {categories.filter(val => !val.name.includes("CTX.Invest") || !val.name.includes("CTX.Transfer")).map((c) => (
                                         <option key={c.id} value={c.id}>{c.name}</option>
                                     ))}
                                 </select>

@@ -1,21 +1,20 @@
-import { parserModel } from "@/libs/gemini";
 import { prisma } from "@/libs/prisma";
-import { delByPattern, delCache } from "@/libs/redis";
-import { createRecordSchemaExtend, discordRecordInputSchema } from "@/server/schemas/discordSchema"
+import { delByPattern, delCache, getCache, setCache } from "@/libs/redis";
 import { createRecordSchema } from "@/server/schemas/recordSchema";
 import { budgetCacheKeys } from "@/server/services/budgetService";
+import { getDashboardCacheKey } from "@/server/services/dashboardService";
 import { getInvestCacheKey } from "@/server/services/investService";
-import { syncWalletHistory } from "@/server/services/recordService";
+import { getRecordCacheKey, syncWalletHistory } from "@/server/services/recordService";
+import { clearAllStatsCache } from "@/server/services/statisticService";
 import { getMonth, getYear } from "date-fns";
 import { NextResponse } from "next/server";
-import { ZodError } from "zod";
 
 export const POST = async (req: Request) => {
     try {
         const body = await req.json()
         const discordId = req.headers.get("x-discord-id");
 
-        const validation = discordRecordInputSchema.safeParse(body)
+        const validation = createRecordSchema.safeParse(body)
         if (!validation.success) {
             return NextResponse.json({
                 success: false,
@@ -38,94 +37,14 @@ export const POST = async (req: Request) => {
                 error: "User not connected to app"
             }, { status: 403 });
         }
-        const { text } = validation.data
 
-        const [wallets, categories, investment] = await Promise.all([
-            prisma.wallet.findMany({
-                where: {
-                    userId: user.userId
-                },
-                select: {
-                    id: true,
-                    name: true
-                }
-            }),
-            prisma.category.findMany({
-                where: {
-                    userId: user.userId
-                },
-                select: {
-                    id: true,
-                    name: true
-                }
-            }),
-            prisma.investment.findMany({
-                where: {
-                    userId: user.userId
-                },
-                select: {
-                    id: true,
-                    assetName: true,
-                }
-            })
-        ])
+        const {
+            type, amount, walletId, categoryId,
+            toWalletId, isInvestment, date, description,
+            investmentId,
+        } = validation.data;
 
-        const prompt = `
-        Context: Wallet=${JSON.stringify(wallets)}, Category=${JSON.stringify(categories)}, Now=${new Date().toISOString()}, Investment=${JSON.stringify(investment)}
-        Input: "${text}"
-
-        Output JSON Rules:
-        1. Fields: type(INCOME|OUTCOME|TRANSFER), amount(num), walletId(str), date(ISO), isInvestment(bool), categoryId(str?), description(str?), toWalletId(str?), investmentId(str?).
-        2. Strict: walletId & categoryId MUST exist in Context. If not found, return {"error": "NOT_FOUND"}.
-        3. Description: Short summary.
-        `;
-
-
-
-        const result = await parserModel.generateContent({
-            contents: [{ role: "user", parts: [{ text: prompt }] }],
-            generationConfig: {
-                responseMimeType: "application/json",
-            },
-        });
-        const responseText = result.response.text()
-        const rawJson = JSON.parse(responseText)
-
-        if (rawJson.error === "NOT_FOUND") {
-            return NextResponse.json({
-                success: false,
-                error: "Wallet or Category not recognized. Make sure the name matches."
-            }, { status: 422 });
-        }
-
-        if (!rawJson.walletId || (rawJson.type !== "TRANSFER" && !rawJson.categoryId)) {
-            return NextResponse.json({
-                success: false,
-                error: "Incomplete data (Wallet/Category not detected)."
-            }, { status: 422 });
-        }
-
-
-        const validateData = createRecordSchemaExtend.safeParse({
-            ...rawJson,
-            date: new Date(rawJson.date),
-            userId: user.userId
-        })
-
-
-
-
-        if (!validateData.success) {
-            return NextResponse.json({
-                success: false,
-                error: "Invalid AI data",
-                cause: validateData.error.message
-            }, { status: 422 });
-        }
-
-        const { categoryId, isInvestment, type, toWalletId, walletId, amount, description, date, investmentId } = validateData.data
-
-        const createdRecord = await prisma.$transaction(async (tx) => {
+        const created = await prisma.$transaction(async (tx) => {
             let finalCategoryId = categoryId;
 
             // 1. LOGIKA KATEGORI OTOMATIS
@@ -169,42 +88,6 @@ export const POST = async (req: Request) => {
                     investmentId,
                     toWalletId: type === "TRANSFER" ? toWalletId : null,
                 },
-                select: {
-                    category: {
-                        select: {
-                            name: true,
-                            icon: true,
-                            color: true
-                        }
-                    },
-                    amount: true,
-                    wallet: {
-                        select: {
-                            name: true,
-                            balance: true,
-                            type: true
-                        }
-                    },
-                    date: true,
-                    toWallet: {
-                        select: {
-                            name: true,
-                            balance: true,
-                            type: true
-                        }
-                    },
-                    type: true,
-                    description: true,
-                    isInvestment: true,
-                    investment: {
-                        select: {
-                            assetName: true,
-                            provider: true,
-                            totalInvestment: true
-                        }
-                    }
-
-                }
             });
 
             // 3. UPDATE SALDO WALLET
@@ -274,25 +157,24 @@ export const POST = async (req: Request) => {
                 await delCache(budgetCacheKeys.AVAIL_MONTHS(user.userId))
             }
 
-            return transaction
+            return transaction;
         });
+
+        //invalidate record redis
+        await delByPattern(getRecordCacheKey.listPattern(user.userId));
+        //invalidate stats redis
+        await clearAllStatsCache({ delByPattern, delCache, getCache, setCache }, user.userId)
+        //invalidate dashboard redis
+        await delCache(getDashboardCacheKey(user.userId))
 
         return NextResponse.json({
-            data: createdRecord
+            data: created
         });
     } catch (error) {
-        if (error instanceof ZodError) {
-            return NextResponse.json({
-                success: false,
-                error: "Invalid AI data: " + error.message
-            }, { status: 422 });
-        }
-
-        console.error("PARSE_ERROR:", error);
+        console.error("error:", error);
         return NextResponse.json({
             success: false,
             error: "Failed to process transaction"
         }, { status: 500 });
     }
-
 }

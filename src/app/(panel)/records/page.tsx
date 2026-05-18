@@ -24,6 +24,7 @@ import { useGetCategory } from '@/hooks/categoryHook';
 import getVisiblePages from '@/utils/getVisiblePage';
 import { useGetInvest } from '@/hooks/investHook';
 import { RecordSkeleton } from './components/Skeleton';
+import { Transaction } from './dto';
 
 
 
@@ -93,17 +94,55 @@ export default function RecordsPage() {
 
     const openModal = (value: Transaction["data"] | null = null) => {
         if (value) {
-            const formData = {
-                ...value,
+            const baseData = {
+                type: value.type,
                 amount: Number(value.amount),
-                categoryId: value.categoryId ?? "",
-                toWalletId: value.toWalletId ?? "",
-                description: value.description ?? "",
-                gramAmount: value.gramAmount ? Number(value.gramAmount) : undefined,
-                buyPrice: value.buyPrice ? Number(value.buyPrice) : undefined,
-                sellPrice: value.sellPrice ? Number(value.sellPrice) : undefined,
+                walletId: value.walletId,
                 date: new Date(value.date),
+                description: value.description || undefined,
             };
+
+            let formData: any;
+
+            if (value.type === "OUTCOME") {
+                if (value.isInvestment) {
+                    formData = {
+                        ...baseData,
+                        type: "OUTCOME" as const,
+                        isInvestment: true as const,
+                        investmentId: value.investmentId || "",
+                        categoryId: undefined,
+                        toWalletId: undefined,
+                    };
+                } else {
+                    formData = {
+                        ...baseData,
+                        type: "OUTCOME" as const,
+                        isInvestment: false as const,
+                        categoryId: value.categoryId || "",
+                        investmentId: undefined,
+                        toWalletId: undefined,
+                    };
+                }
+            } else if (value.type === "INCOME") {
+                formData = {
+                    ...baseData,
+                    type: "INCOME" as const,
+                    isInvestment: false as const,
+                    categoryId: undefined,
+                    investmentId: undefined,
+                    toWalletId: undefined,
+                };
+            } else if (value.type === "TRANSFER") {
+                formData = {
+                    ...baseData,
+                    type: "TRANSFER" as const,
+                    isInvestment: false as const,
+                    toWalletId: value.toWalletId || "",
+                    categoryId: undefined,
+                    investmentId: undefined,
+                };
+            }
 
             reset(formData);
         } else {
