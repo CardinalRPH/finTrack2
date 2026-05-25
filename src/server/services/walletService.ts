@@ -86,18 +86,6 @@ export const walletService = {
     createData: async ({ ctx, data }: { ctx: Context, data: walletCreateSchemaType }) => {
         const cacheKey = getWaletCacheKey(ctx.user!.id)
         try {
-
-            const existed = await ctx.prisma.wallet.findFirst({
-                where: {
-                    type: data.type
-                }
-            })
-            if (existed) {
-                throw new TRPCError({
-                    code: "FORBIDDEN",
-                    message: "This wallet is existed"
-                })
-            }
             const createddat = await ctx.prisma.wallet.create({
                 data: {
                     ...data,

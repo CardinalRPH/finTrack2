@@ -166,7 +166,7 @@ export const POST = async (req: Request) => {
                     isInvestment,
                     description,
                     date: date,
-                    investmentId,
+                    investmentId: investmentId || null,
                     toWalletId: type === "TRANSFER" ? toWalletId : null,
                 },
                 select: {

@@ -1,46 +1,76 @@
 import z from "zod";
 
-const baseRecordSchema = {
+export const createRecordSchema = z.object({
     amount: z.number().positive("Nominal harus lebih dari 0"),
     walletId: z.string().min(1, "Dompet asal wajib dipilih"),
     date: z.coerce.date(),
     description: z.string().optional(),
-};
 
-export const createRecordSchema = z.discriminatedUnion("type", [
-    z.object({
-        ...baseRecordSchema,
-        type: z.literal("OUTCOME"),
-        isInvestment: z.literal(false).default(false),
-        categoryId: z.string().min(1, "Kategori wajib diisi untuk pengeluaran non-investasi"),
-        investmentId: z.undefined().describe("Investment ID harus kosong jika bukan investasi"),
-        toWalletId: z.undefined().describe("Transfer bank tujuan harus kosong untuk outcome"),
-    }),
-    z.object({
-        ...baseRecordSchema,
-        type: z.literal("OUTCOME"),
-        isInvestment: z.literal(true),
-        investmentId: z.string().min(1, "Investment ID wajib diisi untuk pengeluaran investasi"),
-        categoryId: z.undefined().describe("Category harus kosong jika berinvestasi"),
-        toWalletId: z.undefined().describe("Transfer bank tujuan harus kosong untuk outcome"),
-    }),
-    z.object({
-        ...baseRecordSchema,
-        type: z.literal("INCOME"),
-        categoryId: z.undefined(),
-        isInvestment: z.literal(false).default(false),
-        investmentId: z.undefined(),
-        toWalletId: z.undefined(),
-    }),
-    z.object({
-        ...baseRecordSchema,
-        type: z.literal("TRANSFER"),
-        categoryId: z.undefined(),
-        toWalletId: z.string().min(1, "Dompet tujuan wajib dipilih untuk transfer"),
-        isInvestment: z.literal(false).default(false),
-        investmentId: z.undefined(),
-    }),
-]);
+    type: z.enum(["OUTCOME", "INCOME", "TRANSFER"]),
+    isInvestment: z.boolean().default(false),
+
+    categoryId: z.string().optional(),
+    investmentId: z.string().optional(),
+    toWalletId: z.string().optional(),
+}).superRefine((data, ctx) => {
+
+    // 1. ATURAN OUTCOME
+    if (data.type === "OUTCOME") {
+        if (data.toWalletId) {
+            ctx.addIssue({
+                code: "custom",
+                path: ["toWalletId"],
+                message: "Transfer bank tujuan harus kosong untuk outcome",
+            });
+        }
+
+        if (data.isInvestment) {
+            // OUTCOME + Investasi
+            if (!data.investmentId || data.investmentId.trim() === "") {
+                ctx.addIssue({
+                    code: "custom",
+                    path: ["investmentId"],
+                    message: "Investment ID wajib diisi untuk pengeluaran investasi",
+                });
+            }
+        } else {
+            // OUTCOME Biasa
+            if (!data.categoryId || data.categoryId.trim() === "") {
+                ctx.addIssue({
+                    code: "custom",
+                    path: ["categoryId"],
+                    message: "Kategori wajib diisi untuk pengeluaran non-investasi",
+                });
+            }
+        }
+    }
+
+    // 2. ATURAN INCOME
+    if (data.type === "INCOME") {
+        if (data.isInvestment) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                path: ["isInvestment"],
+                message: "Income tidak boleh berupa investasi",
+            });
+        }
+    }
+
+    // 3. ATURAN TRANSFER
+    if (data.type === "TRANSFER") {
+        if (!data.toWalletId || data.toWalletId.trim() === "") {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                path: ["toWalletId"],
+                message: "Dompet tujuan wajib dipilih untuk transfer",
+            });
+        }
+    }
+});
+
+export const createRecordSchemaExtend = createRecordSchema.and(
+    z.object({ userId: z.string() })
+);
 
 export type createRecordSchemaType = z.infer<typeof createRecordSchema>
 export type CreateRecordFormInput = z.input<typeof createRecordSchema>
