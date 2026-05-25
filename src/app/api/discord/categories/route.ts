@@ -29,7 +29,7 @@ export const GET = async (req: Request) => {
         const cached = await getCache<categoryDTO[]>(cacheKey);
 
         if (cached) {
-            return { data: cached };
+            return NextResponse.json({ data: cached })
         }
 
 

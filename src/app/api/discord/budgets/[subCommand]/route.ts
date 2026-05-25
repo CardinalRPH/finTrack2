@@ -36,7 +36,11 @@ export const GET = async (req: Request, context: RouteParams) => {
             const cacheKey = budgetCacheKeys.AVAIL_MONTHS(user.userId);
 
             const cached = await getCache<budgetMonthYearDTO[]>(cacheKey);
-            if (cached) return { data: cached };
+            if (cached) {
+                return NextResponse.json({
+                    data: cached
+                })
+            };
 
             const data = await prisma.categoryBudget.groupBy({
                 by: ['month', 'year'],
@@ -59,7 +63,11 @@ export const GET = async (req: Request, context: RouteParams) => {
             const cacheKey = budgetCacheKeys.LIST(user.userId, `${year}-${month}`);
 
             const cached = await getCache<budgetListDTO>(cacheKey);
-            if (cached) return { data: cached };
+            if (cached) {
+                return NextResponse.json({
+                    data: cached
+                })
+            };
 
             const monthYear = new Date(year, month, 1)
             const selectedMonth = getMonth(monthYear) + 1 || getMonth(new Date());

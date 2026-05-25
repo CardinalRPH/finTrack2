@@ -29,7 +29,9 @@ export const GET = async (req: Request) => {
 
         const cachedData = await getCache<stsSpendingDTO>(cacheKey);
         if (cachedData) {
-            return { data: cachedData };
+            return NextResponse.json({
+                data: cachedData
+            });
         }
         const now = new Date();
 

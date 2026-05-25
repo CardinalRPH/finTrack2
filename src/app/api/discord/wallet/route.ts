@@ -29,7 +29,9 @@ export const GET = async (req: Request) => {
         const cached = await getCache<walletDTO[]>(cacheKey);
 
         if (cached) {
-            return { data: cached };
+            return NextResponse.json({
+                data: cached
+            })
         }
 
         const data = await prisma.wallet.findMany({
