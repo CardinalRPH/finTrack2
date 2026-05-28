@@ -1,12 +1,8 @@
 import z from "zod";
 
 const envSchema = z.object({
-    ENV: z
-        .union([
-            z.literal('development'),
-            z.literal('testing'),
-            z.literal('production'),
-        ])
+    NODE_ENV: z
+        .enum(['development', 'testing', 'production'])
         .default('development'),
     DATABASE_URL: z.url(),
     DATABASE_USER: z.string(),
@@ -28,6 +24,19 @@ const envSchema = z.object({
     GEMINI_API_KEY: z.string()
 })
 
-const processEnv = envSchema.parse(process.env)
+const parseEnv = () => {
+    try {
+        return envSchema.parse(process.env);
+    } catch (error) {
+        if (error instanceof z.ZodError) {
+            console.error("Invalid Variable:");
+            console.error(JSON.stringify(error.format(), null, 2));
+        } else {
+            console.error("Error on reading file:", error);
+        }
+    }
+}
+
+const processEnv = parseEnv()
 
 export default processEnv
