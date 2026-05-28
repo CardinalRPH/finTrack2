@@ -37,6 +37,6 @@ const parseEnv = () => {
     }
 }
 
-const processEnv = parseEnv()
+const processEnv = parseEnv()!
 
 export default processEnv
