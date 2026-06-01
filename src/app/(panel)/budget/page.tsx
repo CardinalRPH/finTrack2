@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
     HiOutlinePlus,
     HiOutlineChartPie,
@@ -10,17 +10,18 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { createBudgetSchema, createBudgetSchemaType, updateBudgetSchemaType } from "@/server/schemas/budgetSchema";
 import { useSnackbar } from "@/stores/toastStore";
-import { useForm } from "react-hook-form";
+import { useForm, UseFormClearErrors, UseFormReset } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useCreateBudget, useDeleteBudget, useGetAvaiMonthYear, useGetBudget, useUpdateBudget } from "@/hooks/budgetHook";
 import { useGetCategory } from "@/hooks/categoryHook";
 import ConfirmModal from "../components/DialogModal";
 import ErrorModal from "../components/ErrorModal";
 import { CategoryBudgetCard } from "./components/BudgetCard";
-import BudgetModal from "./components/BudgetModal";
 import { BudgetStatCard } from "./components/BudgetStatCard";
 import { formatToRupiah } from "@/utils/fomatCurrency";
 import { BudgetSkeleton } from "./components/Skeleton";
+import MainModal from "../components/MainModal";
+import BudgetFormComponents from "./components/FormComponent";
 
 
 const calculatePercentage = (value: number, limit: number) => {
@@ -40,6 +41,9 @@ export default function BudgetPage() {
     const [targetId, setTargetId] = useState<string | null>(null)
     const [selectedMonthYear, setSelectedMonthYear] = useState<Date>(new Date())
 
+    const resetFormRef = useRef<UseFormReset<createBudgetSchemaType> | null>(null);
+    const clearErrFormRef = useRef<UseFormClearErrors<createBudgetSchemaType> | null>(null);
+
     const { data: monthYearData, error: mYErrMsg, isError: mYErr } = useGetAvaiMonthYear()
     const { data, isLoading, error: getErrMsg, isError: getErr } = useGetBudget({ filter: { monthYear: selectedMonthYear } })
     const { data: catData, error: catErrMsg, isError: catErr } = useGetCategory()
@@ -48,12 +52,6 @@ export default function BudgetPage() {
     const { mutate: deleteBud, error: deleteErrMsg, isPending: deletePend, isError: deleteErr, isSuccess: deleteScss } = useDeleteBudget()
 
     const { show: showToast } = useSnackbar()
-
-
-    const reactForm = useForm({
-        resolver: zodResolver(createBudgetSchema)
-    })
-    const { reset, clearErrors } = reactForm
 
     const onDelete = () => {
         deleteBud({ id: targetId! })
@@ -74,14 +72,18 @@ export default function BudgetPage() {
 
     // Open Modal for Create or Edit
     const openModal = (value: updateBudgetSchemaType | null = null) => {
-        reset(value!)
+        if (resetFormRef.current) {
+            resetFormRef.current(value!)
+        }
         setSelectedBudget(value)
         setModalOpen(true)
     }
 
 
     const onModalClose = () => {
-        clearErrors()
+        if (clearErrFormRef.current) {
+            clearErrFormRef.current()
+        }
         setModalOpen(false)
 
     }
@@ -119,13 +121,17 @@ export default function BudgetPage() {
             setSelectedBudget(null)
             setModalOpen(false)
             showToast("Category Created", "success")
-            reset()
+            if (resetFormRef.current) {
+                resetFormRef.current()
+            }
         }
         if (updateScss) {
             setSelectedBudget(null)
             setModalOpen(false)
             showToast("Category Updated", "success")
-            reset()
+            if (resetFormRef.current) {
+                resetFormRef.current()
+            }
         }
         if (deleteScss) {
             setIsConfirmOpen(false)
@@ -226,17 +232,26 @@ export default function BudgetPage() {
                 <HiOutlinePlus size={32} />
             </motion.button>
 
-            {/* MODAL OVERLAY */}
             <AnimatePresence>
                 {isModalOpen && (
-                    <BudgetModal
-                        categoryData={catData?.data ?? []}
-                        isEditing={Boolean(selectedBudget)}
-                        isPending={createPend || updatePend}
-                        reactForm={reactForm}
+                    <MainModal
+                        modalName={Boolean(selectedBudget) ? "Update Budget" : "Create Budget"}
                         onClose={onModalClose}
-                        onSubmit={onSubmit}
-                    />
+                    >
+                        <BudgetFormComponents
+                            categoryData={catData?.data ?? []}
+                            isPending={createPend || updatePend}
+                            onCancel={onModalClose}
+                            onSubmit={onSubmit}
+                            dataEdit={selectedBudget}
+                            clearError={(clrErr) => {
+                                clearErrFormRef.current = clrErr
+                            }}
+                            resetVal={(resetVal) => {
+                                resetFormRef.current = resetVal
+                            }}
+                        />
+                    </MainModal>
                 )}
             </AnimatePresence>
             <ConfirmModal

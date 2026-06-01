@@ -1,11 +1,10 @@
 "use client"
 
 import { IconRenderer } from '@/app/components/IconRenderer'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { HiOutlinePlus, HiOutlinePencil, HiOutlineTrash } from "react-icons/hi2"
-import CategoryModal from './components/CategoryModal'
 import { AnimatePresence } from 'framer-motion'
-import { useForm } from "react-hook-form";
+import { useForm, UseFormClearErrors, UseFormReset } from "react-hook-form";
 import { zodResolver } from '@hookform/resolvers/zod';
 import { categoryCreateSchema, categoryCreateSchemaType } from '@/server/schemas/categorySchema'
 import { useCreateCategory, useDeleteCategory, useGetCategory, useUpdateCategory } from '@/hooks/categoryHook'
@@ -14,6 +13,8 @@ import { useSnackbar } from '@/stores/toastStore'
 import ConfirmModal from '../components/DialogModal'
 import { categoryDTO } from '@/server/dto/categoryDTO'
 import { CategorySkeleton } from './components/Skeleton'
+import CatFormComponents from './components/FormComponent'
+import MainModal from '../components/MainModal'
 
 
 export default function CategoriesPage() {
@@ -26,16 +27,13 @@ export default function CategoriesPage() {
 
     const { show: showToast } = useSnackbar()
 
+    const resetFormRef = useRef<UseFormReset<categoryCreateSchemaType> | null>(null);
+    const clearErrFormRef = useRef<UseFormClearErrors<categoryCreateSchemaType> | null>(null);
+
     const { data, isLoading, error: getErrMsg, isError: getErr } = useGetCategory()
     const { mutate: createCat, error: createErrMsg, isPending: createPend, isError: createErr, isSuccess: createScss } = useCreateCategory()
     const { mutate: updateCat, error: updateErrMsg, isPending: updatePend, isError: updateErr, isSuccess: updateScss } = useUpdateCategory()
     const { mutate: deleteCat, error: deleteErrMsg, isPending: deletePend, isError: deleteErr, isSuccess: deleteScss } = useDeleteCategory()
-
-    const reactForm = useForm({
-        resolver: zodResolver(categoryCreateSchema)
-    })
-
-    const { reset, clearErrors } = reactForm
 
     const onSubmit = (value: categoryCreateSchemaType) => {
         if (!selectedCat) {
@@ -58,13 +56,17 @@ export default function CategoriesPage() {
 
     // Open Modal for Create or Edit
     const openModal = (category: categoryDTO | null = null) => {
-        reset(category!)
+        if (resetFormRef.current) {
+            resetFormRef.current(category!)
+        }
         setSelectedCat(category)
         setModalOpen(true)
     }
 
     const onModalClose = () => {
-        clearErrors()
+        if (clearErrFormRef.current) {
+            clearErrFormRef.current()
+        }
         setModalOpen(false)
 
     }
@@ -94,13 +96,17 @@ export default function CategoriesPage() {
             setSelectedCat(null)
             setModalOpen(false)
             showToast("Category Created", "success")
-            reset()
+            if (resetFormRef.current) {
+                resetFormRef.current()
+            }
         }
         if (updateScss) {
             setSelectedCat(null)
             setModalOpen(false)
             showToast("Category Updated", "success")
-            reset()
+            if (resetFormRef.current) {
+                resetFormRef.current()
+            }
         }
         if (deleteScss) {
             setIsConfirmOpen(false)
@@ -153,13 +159,22 @@ export default function CategoriesPage() {
             )}
             <AnimatePresence>
                 {isModalOpen && (
-                    <CategoryModal
-                        isPending={createPend || updatePend}
-                        isEditing={Boolean(selectedCat)}
+                    <MainModal
+                        modalName={Boolean(selectedCat) ? "Update Categories" : "Create Categories"}
                         onClose={onModalClose}
-                        reactForm={reactForm}
-                        onSubmit={onSubmit}
-                    />
+                    >
+                        <CatFormComponents
+                            isPending={createPend || updatePend}
+                            onSubmit={onSubmit}
+                            clearError={(clrErr) => {
+                                clearErrFormRef.current = clrErr
+                            }}
+                            resetVal={(resetVal) => {
+                                resetFormRef.current = resetVal
+                            }}
+                            dataEdit={selectedCat}
+                        />
+                    </MainModal>
                 )}
             </AnimatePresence>
             <ConfirmModal

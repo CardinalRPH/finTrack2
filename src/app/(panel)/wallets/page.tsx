@@ -1,12 +1,10 @@
 "use client"
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { HiOutlinePlus, HiOutlineCreditCard, HiOutlineBanknotes, HiOutlineDevicePhoneMobile, HiOutlinePencil, HiOutlineTrash } from "react-icons/hi2"
 import { AnimatePresence } from 'framer-motion'
-import WalletModal from './components/WalletModal'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { walletCreateSchema, walletCreateSchemaType } from '@/server/schemas/walletSchema'
+import { UseFormClearErrors, UseFormReset } from 'react-hook-form'
+import { walletCreateSchemaType } from '@/server/schemas/walletSchema'
 import { useSnackbar } from '@/stores/toastStore'
 import { useCreateWallet, useDeleteWallet, useGetWallet, useUpdateWallet } from '@/hooks/walletHook'
 import ConfirmModal from '../components/DialogModal'
@@ -14,6 +12,8 @@ import ErrorModal from '../components/ErrorModal'
 import { formatToRupiah } from '@/utils/fomatCurrency'
 import { WalletSkeleton } from './components/Skeleton'
 import { walletDTO } from '@/server/dto/walletDTO'
+import WalletFormComponents from './components/FormComponent'
+import MainModal from '../components/Mainmodal'
 
 
 export default function WalletPage() {
@@ -24,20 +24,15 @@ export default function WalletPage() {
     const [isConfirmOpen, setIsConfirmOpen] = useState(false)
     const [targetId, setTargetId] = useState<string | null>(null)
 
+    const resetFormRef = useRef<UseFormReset<walletCreateSchemaType> | null>(null);
+    const clearErrFormRef = useRef<UseFormClearErrors<walletCreateSchemaType> | null>(null);
+
     const { show: showToast } = useSnackbar()
 
     const { data, isLoading, error: getErrMsg, isError: getErr } = useGetWallet()
     const { mutate: createWall, error: createErrMsg, isPending: createPend, isError: createErr, isSuccess: createScss } = useCreateWallet()
     const { mutate: updateWall, error: updateErrMsg, isPending: updatePend, isError: updateErr, isSuccess: updateScss } = useUpdateWallet()
     const { mutate: deleteWall, error: deleteErrMsg, isPending: deletePend, isError: deleteErr, isSuccess: deleteScss } = useDeleteWallet()
-
-    const reactForm = useForm({
-        resolver: zodResolver(walletCreateSchema)
-    })
-    const { reset, clearErrors } = reactForm
-
-    // Identify which types are already taken
-    const takenTypes = data?.data.map(w => w.type)
 
     const handleOpenAdd = () => {
         setSelectedWall(null)
@@ -62,13 +57,17 @@ export default function WalletPage() {
     }
 
     const openModal = (wallet: walletDTO | null = null) => {
-        reset({ ...wallet, balance: Number(wallet?.balance) })
+        if (resetFormRef.current) {
+            resetFormRef.current({ ...wallet, balance: Number(wallet?.balance) })
+        }
         setSelectedWall(wallet)
         setModalOpen(true)
     }
 
     const onModalClose = () => {
-        clearErrors()
+        if (clearErrFormRef.current) {
+            clearErrFormRef.current()
+        }
         setModalOpen(false)
 
     }
@@ -98,13 +97,17 @@ export default function WalletPage() {
             setSelectedWall(null)
             setModalOpen(false)
             showToast("Wallet Created", "success")
-            reset()
+            if (resetFormRef.current) {
+                resetFormRef.current()
+            }
         }
         if (updateScss) {
             setSelectedWall(null)
             setModalOpen(false)
             showToast("Wallet Updated", "success")
-            reset()
+            if (resetFormRef.current) {
+                resetFormRef.current()
+            }
         }
         if (deleteScss) {
             setIsConfirmOpen(false)
@@ -124,7 +127,6 @@ export default function WalletPage() {
                         key={wallet.id}
                         className="relative group bg-slate-900 border border-slate-800 p-6 rounded-4xl overflow-hidden transition-all hover:border-slate-700 shadow-xl"
                     >
-                        {/* Background Glow Deco */}
                         <div className="absolute -right-10 -top-10 w-32 h-32 blur-[80px] opacity-20" />
 
                         <div className="flex justify-between items-start mb-8">
@@ -153,29 +155,36 @@ export default function WalletPage() {
                     </div>
                 ))}
             </div>
-            {takenTypes && takenTypes.length < 3 && !isLoading && (
-                <button
-                    onClick={handleOpenAdd}
-                    className="fixed bottom-8 right-8 z-50 w-16 h-16 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl shadow-2xl shadow-indigo-500/40 flex items-center justify-center transition-all hover:scale-110 active:scale-95 group"
-                >
-                    <HiOutlinePlus className="w-8 h-8 transition-transform group-hover:rotate-90" />
+            <button
+                onClick={handleOpenAdd}
+                className="fixed bottom-8 right-8 z-50 w-16 h-16 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl shadow-2xl shadow-indigo-500/40 flex items-center justify-center transition-all hover:scale-110 active:scale-95 group"
+            >
+                <HiOutlinePlus className="w-8 h-8 transition-transform group-hover:rotate-90" />
 
-                    {/* Tooltip */}
-                    <span className="absolute right-20 bg-slate-800 text-white text-xs px-3 py-2 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap border border-slate-700">
-                        Create New Wallet
-                    </span>
-                </button>
-            )}
+                {/* Tooltip */}
+                <span className="absolute right-20 bg-slate-800 text-white text-xs px-3 py-2 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap border border-slate-700">
+                    Create New Wallet
+                </span>
+            </button>
             <AnimatePresence>
                 {isModalOpen && (
-                    <WalletModal
-                        isPending={createPend || updatePend}
+                    <MainModal
                         onClose={onModalClose}
-                        initData={data!.data}
-                        isEditing={Boolean(selectedWall)}
-                        reactForm={reactForm}
-                        onSubmit={onSubmit}
-                    />
+                        modalName={Boolean(selectedWall) ? "Update Wallet" : "Create Wallet"}
+                    >
+                        <WalletFormComponents
+                            onSubmit={onSubmit}
+                            isPending={createPend || updatePend}
+                            clearError={(clrErr) => {
+                                clearErrFormRef.current = clrErr
+                            }}
+                            resetVal={(resetVal) => {
+                                resetFormRef.current = resetVal
+                            }}
+                            dataEdit={selectedWall}
+
+                        />
+                    </MainModal>
                 )}
             </AnimatePresence>
             <ConfirmModal

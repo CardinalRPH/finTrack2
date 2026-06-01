@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import {
     LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
     PieChart, Pie, Cell,
@@ -9,7 +9,6 @@ import {
 import {
     HiOutlinePlus,
     HiOutlineBriefcase,
-    HiOutlineChartPie,
     HiOutlineScale,
     HiOutlineCalendar,
     HiOutlinePencil,

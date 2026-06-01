@@ -1,7 +1,7 @@
 "use client"
 import { walletCreateSchema, walletCreateSchemaType } from "@/server/schemas/walletSchema"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { useForm } from "react-hook-form"
+import { useForm, UseFormClearErrors, UseFormReset } from "react-hook-form"
 import { WalletType } from "../../../../../generated/prisma/enums"
 import { HiOutlineBanknotes, HiOutlineCreditCard, HiOutlineDevicePhoneMobile } from "react-icons/hi2"
 import { walletDTO } from "@/server/dto/walletDTO"
@@ -15,21 +15,32 @@ const WALLET_TYPES = [
 ]
 
 
-const FormComponents = ({ onSubmit, isPending, dataEdit }: {
+const WalletFormComponents = ({ onSubmit, isPending, dataEdit, resetVal, clearError }: {
     onSubmit: (value: walletCreateSchemaType) => void,
     isPending: boolean
-    dataEdit?: Omit<walletDTO, "id">
+    dataEdit?: walletDTO | null
+    clearError?: (clearErr: UseFormClearErrors<walletCreateSchemaType>) => void
+    resetVal?: (reset: UseFormReset<walletCreateSchemaType>) => void
+
 }) => {
-    const { formState: { errors }, handleSubmit, register, setValue, watch } = useForm({
+    const { formState: { errors }, handleSubmit, register, setValue, watch, clearErrors, reset } = useForm({
         resolver: zodResolver(walletCreateSchema)
     })
     const selectedType = watch("type")
 
     useEffect(() => {
+        if (resetVal) {
+            resetVal(reset);
+        }
+        if (clearError) {
+            clearError(clearErrors)
+        }
+
+    }, [clearErrors, clearError, resetVal, reset])
+
+    useEffect(() => {
         if (dataEdit) {
-            setValue("balance", Number(dataEdit.balance))
-            setValue("name", dataEdit.name)
-            setValue("type", dataEdit.type)
+            reset({ ...dataEdit, balance: Number(dataEdit) })
         }
     }, [dataEdit])
     return (
@@ -90,4 +101,4 @@ const FormComponents = ({ onSubmit, isPending, dataEdit }: {
     )
 }
 
-export default FormComponents
+export default WalletFormComponents
