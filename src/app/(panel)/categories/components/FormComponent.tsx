@@ -1,4 +1,5 @@
 "use client"
+// todo: add more icon and fix default color
 import { IconRenderer } from "@/app/components/IconRenderer"
 import { categoryCreateSchema, categoryCreateSchemaType } from "@/server/schemas/categorySchema"
 import { zodResolver } from "@hookform/resolvers/zod"
