@@ -1,5 +1,5 @@
+"use client"
 import { IconRenderer } from "@/app/components/IconRenderer"
-import { categoryDTO } from "@/server/dto/categoryDTO"
 import { categoryCreateSchema, categoryCreateSchemaType } from "@/server/schemas/categorySchema"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useEffect } from "react"
@@ -11,10 +11,10 @@ const iconOptions = [
     'HiOutlineHeart', 'HiOutlineGift'
 ]
 
-const CatFormComponents = ({ onSubmit, isPending, dataEdit, resetVal, clearError }: {
+const CatFormComponents = ({ onSubmit, isPending, isEditing, resetVal, clearError }: {
     onSubmit: (value: categoryCreateSchemaType) => void,
     isPending: boolean
-    dataEdit?: categoryDTO | null
+    isEditing?: boolean
     clearError?: (clearErr: UseFormClearErrors<categoryCreateSchemaType>) => void
     resetVal?: (reset: UseFormReset<categoryCreateSchemaType>) => void
 }) => {
@@ -34,12 +34,6 @@ const CatFormComponents = ({ onSubmit, isPending, dataEdit, resetVal, clearError
         }
 
     }, [clearErrors, clearError, resetVal, reset])
-
-    useEffect(() => {
-        if (dataEdit) {
-            reset(dataEdit)
-        }
-    }, [dataEdit])
 
 
     return (
@@ -88,7 +82,7 @@ const CatFormComponents = ({ onSubmit, isPending, dataEdit, resetVal, clearError
             </div>
 
             <button disabled={isPending} type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 py-4 rounded-2xl font-bold transition-all shadow-lg shadow-indigo-500/20">
-                {Boolean(dataEdit) ? 'Save Changes' : 'Create Category'}
+                {isEditing ? 'Save Changes' : 'Create Category'}
             </button>
         </form>
     )

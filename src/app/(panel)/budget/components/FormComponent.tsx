@@ -1,12 +1,13 @@
+"use client"
 import { categoryDTO } from "@/server/dto/categoryDTO"
-import { createBudgetSchema, createBudgetSchemaType, updateBudgetSchemaType } from "@/server/schemas/budgetSchema"
+import { createBudgetSchema, createBudgetSchemaType } from "@/server/schemas/budgetSchema"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useEffect } from "react"
 import { useForm, UseFormClearErrors, UseFormReset } from "react-hook-form"
 
-const BudgetFormComponents = ({ onSubmit, categoryData, clearError, dataEdit, resetVal, isPending, onCancel }: {
+const BudgetFormComponents = ({ onSubmit, categoryData, clearError, isEditing, resetVal, isPending, onCancel }: {
     onSubmit: (value: createBudgetSchemaType) => void,
-    dataEdit?: updateBudgetSchemaType | null
+    isEditing?: boolean
     categoryData: categoryDTO[]
     clearError?: (clearErr: UseFormClearErrors<createBudgetSchemaType>) => void
     resetVal?: (reset: UseFormReset<createBudgetSchemaType>) => void
@@ -27,12 +28,6 @@ const BudgetFormComponents = ({ onSubmit, categoryData, clearError, dataEdit, re
 
     }, [clearErrors, clearError, resetVal, reset])
 
-    useEffect(() => {
-        if (dataEdit) {
-            reset(dataEdit)
-        }
-    }, [dataEdit])
-    
     return (
         <form className="space-y-6" onSubmit={handleSubmit(onSubmit)}>
             <div className="space-y-2">
@@ -55,8 +50,13 @@ const BudgetFormComponents = ({ onSubmit, categoryData, clearError, dataEdit, re
                 <div className="relative">
                     <span className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-500 font-bold">Rp</span>
                     <input
-                        type="number"
-                        {...register("amount", { valueAsNumber: true })}
+                        type="text"
+                        {...register("amount", { 
+                            valueAsNumber: true,
+                             onChange:(e)=> {
+                                 e.target.value = e.target.value.replace(/\D/g, "");
+                             }
+                          })}
                         placeholder="0"
                         className="w-full bg-slate-950 border border-slate-800 text-white rounded-2xl pl-14 pr-6 py-4 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
                     />
@@ -87,7 +87,7 @@ const BudgetFormComponents = ({ onSubmit, categoryData, clearError, dataEdit, re
                     type="submit"
                     className="flex-1 py-4 rounded-2xl bg-indigo-600 text-white font-bold hover:bg-indigo-500 shadow-lg shadow-indigo-500/20 transition-all"
                 >
-                    {Boolean(dataEdit) ? "Update Budget" : "Set Budget"}
+                    {isEditing ? "Update Budget" : "Set Budget"}
                 </button>
             </div>
         </form>

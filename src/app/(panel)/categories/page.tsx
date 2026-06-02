@@ -4,9 +4,8 @@ import { IconRenderer } from '@/app/components/IconRenderer'
 import { useEffect, useRef, useState } from 'react'
 import { HiOutlinePlus, HiOutlinePencil, HiOutlineTrash } from "react-icons/hi2"
 import { AnimatePresence } from 'framer-motion'
-import { useForm, UseFormClearErrors, UseFormReset } from "react-hook-form";
-import { zodResolver } from '@hookform/resolvers/zod';
-import { categoryCreateSchema, categoryCreateSchemaType } from '@/server/schemas/categorySchema'
+import { UseFormClearErrors, UseFormReset } from "react-hook-form";
+import { categoryCreateSchemaType } from '@/server/schemas/categorySchema'
 import { useCreateCategory, useDeleteCategory, useGetCategory, useUpdateCategory } from '@/hooks/categoryHook'
 import ErrorModal from '../components/ErrorModal'
 import { useSnackbar } from '@/stores/toastStore'
@@ -172,7 +171,7 @@ export default function CategoriesPage() {
                             resetVal={(resetVal) => {
                                 resetFormRef.current = resetVal
                             }}
-                            dataEdit={selectedCat}
+                            isEditing={Boolean(selectedCat)}
                         />
                     </MainModal>
                 )}

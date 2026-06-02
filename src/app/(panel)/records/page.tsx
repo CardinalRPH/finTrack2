@@ -1,7 +1,7 @@
 "use client"
 
 import { IconRenderer } from '@/app/components/IconRenderer'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
     HiOutlineAdjustmentsHorizontal,
 
@@ -11,10 +11,8 @@ import {
 } from "react-icons/hi2"
 import { HiOutlineSearch } from "react-icons/hi";
 import { AnimatePresence } from 'framer-motion';
-import RecordModal from './components/RecordModal';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { CreateRecordFormInput, createRecordSchema, createRecordSchemaType, getAllRecordSchemaType } from '@/server/schemas/recordSchema';
+import { UseFormClearErrors, UseFormReset } from 'react-hook-form';
+import { CreateRecordFormInput, getAllRecordSchemaType } from '@/server/schemas/recordSchema';
 import { useSnackbar } from '@/stores/toastStore';
 import { useCreateRecord, useDeleteRecord, useGetRecord, useUpdateRecord } from '@/hooks/recordHook';
 import ErrorModal from '../components/ErrorModal';
@@ -25,6 +23,8 @@ import getVisiblePages from '@/utils/getVisiblePage';
 import { useGetInvest } from '@/hooks/investHook';
 import { RecordSkeleton } from './components/Skeleton';
 import { Transaction } from './dto';
+import MainModal from '../components/MainModal';
+import RecordFormComponent from './components/FormComponent';
 
 
 
@@ -41,6 +41,9 @@ export default function RecordsPage() {
 
     const [page, setPage] = useState(1)
 
+    const resetFormRef = useRef<UseFormReset<CreateRecordFormInput> | null>(null);
+    const clearErrFormRef = useRef<UseFormClearErrors<CreateRecordFormInput> | null>(null);
+
     const { data, isLoading, error: getErrMsg, isError: getErr } = useGetRecord({
         filter: {
             range: timeRange,
@@ -54,15 +57,6 @@ export default function RecordsPage() {
     const { data: catData, error: catErrMsg, isError: catErr } = useGetCategory()
     const { data: invData, error: invErrMsg, isError: invErr } = useGetInvest()
 
-    const reactForm = useForm<CreateRecordFormInput>({
-        resolver: zodResolver(createRecordSchema),
-        defaultValues: {
-            date: new Date(),
-            isInvestment: false,
-            type: "OUTCOME"
-        }
-    })
-    const { reset, clearErrors } = reactForm
 
     // Pagination State
     const itemsPerPage = 20
@@ -143,17 +137,20 @@ export default function RecordsPage() {
                     investmentId: undefined,
                 };
             }
-
-            reset(formData);
+            if (resetFormRef.current) {
+                resetFormRef.current(formData)
+            }
         } else {
-            reset({
-                type: 'OUTCOME',
-                amount: 0,
-                date: new Date(),
-                categoryId: "",
-                walletId: "",
-                isInvestment: false
-            });
+            if (resetFormRef.current) {
+                resetFormRef.current({
+                    type: 'OUTCOME',
+                    amount: 0,
+                    date: new Date(),
+                    categoryId: "",
+                    walletId: "",
+                    isInvestment: false
+                })
+            }
         }
         setSelectedRecord(value)
         setModalOpen(true)
@@ -161,7 +158,9 @@ export default function RecordsPage() {
 
 
     const onModalClose = () => {
-        clearErrors()
+        if (clearErrFormRef.current) {
+            clearErrFormRef.current()
+        }
         setModalOpen(false)
     }
 
@@ -202,13 +201,17 @@ export default function RecordsPage() {
             setSelectedRecord(null)
             setModalOpen(false)
             showToast("Record Created", "success")
-            reset()
+            if (resetFormRef.current) {
+                resetFormRef.current()
+            }
         }
         if (updateScss) {
             setSelectedRecord(null)
             setModalOpen(false)
             showToast("Record Updated", "success")
-            reset()
+            if (resetFormRef.current) {
+                resetFormRef.current()
+            }
         }
         if (deleteScss) {
             setIsConfirmOpen(false)
@@ -362,17 +365,26 @@ export default function RecordsPage() {
 
             <AnimatePresence>
                 {isModalOpen && (
-                    <RecordModal
-                        investments={invData?.data ?? []}
-                        onSubmit={onSubmit}
+                    <MainModal
                         onClose={onModalClose}
-                        isEditing={Boolean(selectedRecord)}
-                        isPending={createPend || updatePend}
-                        reactForm={reactForm}
-                        wallets={wallData?.data ?? []}
-                        categories={catData?.data ?? []}
+                        modalName={Boolean(selectedRecord) ? 'Edit Record' : 'Add New Record'}
+                    >
+                        <RecordFormComponent
+                            onSubmit={onSubmit}
+                            wallets={wallData?.data ?? []}
+                            categories={catData?.data ?? []}
+                            investments={invData?.data ?? []}
+                            dataEdit={selectedRecord}
+                            isPending={createPend || updatePend}
+                            clearError={(clrErr) => {
+                                clearErrFormRef.current = clrErr
+                            }}
+                            resetVal={(resetVal) => {
+                                resetFormRef.current = resetVal
+                            }}
 
-                    />
+                        />
+                    </MainModal>
                 )}
             </AnimatePresence>
             <ConfirmModal

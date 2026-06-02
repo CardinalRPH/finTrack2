@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
     LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
     PieChart, Pie, Cell,
@@ -16,15 +16,15 @@ import {
 } from "react-icons/hi2"
 import { AnimatePresence } from 'framer-motion'
 import { formatToRupiah } from '@/utils/fomatCurrency'
-import CreateInvestmentModal from './components/InvestmentModal'
 import { useCreateInvest, useDeleteInvest, useGetInvestDashboard, useGetInvestYear, useUpdateInvest } from '@/hooks/investHook'
 import { useSnackbar } from '@/stores/toastStore'
-import { investCreateSchema, investCreateSchemaType, investUpdateSchemaType } from '@/server/schemas/investSchema'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
+import { investCreateSchemaType, investUpdateSchemaType } from '@/server/schemas/investSchema'
+import { UseFormClearErrors, UseFormReset } from 'react-hook-form'
 import ErrorModal from '../components/ErrorModal'
 import ConfirmModal from '../components/DialogModal'
 import { InvestmentSkeleton } from './components/Skeleton'
+import MainModal from '../components/MainModal'
+import InvestFormComponent from './components/FormComponent'
 
 
 const COLORS = ['#6366f1', '#f59e0b', '#10b981', '#ec4899'];
@@ -44,12 +44,10 @@ export default function InvestmentPage() {
     const { mutate: updateInv, error: updateErrMsg, isPending: updatePend, isError: updateErr, isSuccess: updateScss } = useUpdateInvest()
     const { mutate: deleteInv, error: deleteErrMsg, isPending: deletePend, isError: deleteErr, isSuccess: deleteScss } = useDeleteInvest()
 
-    const { show: showToast } = useSnackbar()
+    const resetFormRef = useRef<UseFormReset<investCreateSchemaType> | null>(null);
+    const clearErrFormRef = useRef<UseFormClearErrors<investCreateSchemaType> | null>(null);
 
-    const reactForm = useForm({
-        resolver: zodResolver(investCreateSchema)
-    })
-    const { reset, clearErrors } = reactForm
+    const { show: showToast } = useSnackbar()
 
     const onDelete = () => {
         deleteInv({ id: targetId! })
@@ -70,14 +68,18 @@ export default function InvestmentPage() {
 
     // Open Modal for Create or Edit
     const openModal = (value: investUpdateSchemaType | null = null) => {
-        reset(value!)
+        if (resetFormRef.current) {
+            resetFormRef.current(value!)
+        }
         setSelectedInvest(value)
         setModalOpen(true)
     }
 
 
     const onModalClose = () => {
-        clearErrors()
+        if (clearErrFormRef.current) {
+            clearErrFormRef.current()
+        }
         setModalOpen(false)
 
     }
@@ -111,13 +113,17 @@ export default function InvestmentPage() {
             setSelectedInvest(null)
             setModalOpen(false)
             showToast("Category Created", "success")
-            reset()
+            if (resetFormRef.current) {
+                resetFormRef.current()
+            }
         }
         if (updateScss) {
             setSelectedInvest(null)
             setModalOpen(false)
             showToast("Category Updated", "success")
-            reset()
+            if (resetFormRef.current) {
+                resetFormRef.current()
+            }
         }
         if (deleteScss) {
             setIsConfirmOpen(false)
@@ -290,14 +296,23 @@ export default function InvestmentPage() {
 
             <AnimatePresence>
                 {isModalOpen &&
-                    <CreateInvestmentModal
-                        isEditing={Boolean(selectedInvest)}
-                        reactForm={reactForm}
-                        onSubmit={onSubmit}
-                        isPending={createPend || updatePend}
+                    <MainModal
+                        modalName={Boolean(selectedInvest) ? "Update Investment" : "Create Investment"}
                         onClose={onModalClose}
-
-                    />}
+                    >
+                        <InvestFormComponent
+                            isPending={createPend || updatePend}
+                            onSubmit={onSubmit}
+                            clearError={(clrErr) => {
+                                clearErrFormRef.current = clrErr
+                            }}
+                            resetVal={(resetVal) => {
+                                resetFormRef.current = resetVal
+                            }}
+                            isEditing={Boolean(selectedInvest)}
+                        />
+                    </MainModal>
+                }
             </AnimatePresence>
             <ErrorModal isOpen={isErrMdOpen} onClose={() => setErrMdOpen(false)} message={errMsg || ""} />
             <ConfirmModal

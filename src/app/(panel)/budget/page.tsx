@@ -1,5 +1,7 @@
 "use client";
 
+// todo: implement delete
+
 import { useEffect, useRef, useState } from "react";
 import {
     HiOutlinePlus,
@@ -8,10 +10,9 @@ import {
     HiOutlineArrowSmDown
 } from "react-icons/hi";
 import { motion, AnimatePresence } from "framer-motion";
-import { createBudgetSchema, createBudgetSchemaType, updateBudgetSchemaType } from "@/server/schemas/budgetSchema";
+import { createBudgetSchemaType, updateBudgetSchemaType } from "@/server/schemas/budgetSchema";
 import { useSnackbar } from "@/stores/toastStore";
-import { useForm, UseFormClearErrors, UseFormReset } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
+import { UseFormClearErrors, UseFormReset } from "react-hook-form";
 import { useCreateBudget, useDeleteBudget, useGetAvaiMonthYear, useGetBudget, useUpdateBudget } from "@/hooks/budgetHook";
 import { useGetCategory } from "@/hooks/categoryHook";
 import ConfirmModal from "../components/DialogModal";
@@ -243,7 +244,7 @@ export default function BudgetPage() {
                             isPending={createPend || updatePend}
                             onCancel={onModalClose}
                             onSubmit={onSubmit}
-                            dataEdit={selectedBudget}
+                            isEditing={Boolean(selectedBudget)}
                             clearError={(clrErr) => {
                                 clearErrFormRef.current = clrErr
                             }}

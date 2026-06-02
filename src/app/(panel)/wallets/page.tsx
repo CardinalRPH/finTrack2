@@ -1,5 +1,7 @@
 "use client"
 
+// todo: fix delte and edit button
+
 import { useEffect, useRef, useState } from 'react'
 import { HiOutlinePlus, HiOutlineCreditCard, HiOutlineBanknotes, HiOutlineDevicePhoneMobile, HiOutlinePencil, HiOutlineTrash } from "react-icons/hi2"
 import { AnimatePresence } from 'framer-motion'
@@ -13,7 +15,7 @@ import { formatToRupiah } from '@/utils/fomatCurrency'
 import { WalletSkeleton } from './components/Skeleton'
 import { walletDTO } from '@/server/dto/walletDTO'
 import WalletFormComponents from './components/FormComponent'
-import MainModal from '../components/Mainmodal'
+import MainModal from '../components/MainModal'
 
 
 export default function WalletPage() {
@@ -181,7 +183,7 @@ export default function WalletPage() {
                             resetVal={(resetVal) => {
                                 resetFormRef.current = resetVal
                             }}
-                            dataEdit={selectedWall}
+                            isEditing={Boolean(selectedWall)}
 
                         />
                     </MainModal>

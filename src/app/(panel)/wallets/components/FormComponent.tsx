@@ -15,10 +15,10 @@ const WALLET_TYPES = [
 ]
 
 
-const WalletFormComponents = ({ onSubmit, isPending, dataEdit, resetVal, clearError }: {
+const WalletFormComponents = ({ onSubmit, isPending, isEditing, resetVal, clearError }: {
     onSubmit: (value: walletCreateSchemaType) => void,
     isPending: boolean
-    dataEdit?: walletDTO | null
+    isEditing?: boolean
     clearError?: (clearErr: UseFormClearErrors<walletCreateSchemaType>) => void
     resetVal?: (reset: UseFormReset<walletCreateSchemaType>) => void
 
@@ -37,12 +37,6 @@ const WalletFormComponents = ({ onSubmit, isPending, dataEdit, resetVal, clearEr
         }
 
     }, [clearErrors, clearError, resetVal, reset])
-
-    useEffect(() => {
-        if (dataEdit) {
-            reset({ ...dataEdit, balance: Number(dataEdit) })
-        }
-    }, [dataEdit])
     return (
         <form className="space-y-6" onSubmit={handleSubmit(onSubmit)}>
             {/* Wallet Name */}
@@ -86,8 +80,8 @@ const WalletFormComponents = ({ onSubmit, isPending, dataEdit, resetVal, clearEr
             <div>
                 <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Current Balance</label>
                 <input
-                    type="number"
-                    {...register("balance", { valueAsNumber: true })}
+                    type="text"
+                    {...register("balance", { valueAsNumber: true, onChange: (e) => { e.target.value = e.target.value.replace(/\D/g, ""); } })}
                     className="w-full bg-slate-950 border border-slate-800 rounded-2xl px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500"
                     placeholder="0"
                 />
@@ -95,7 +89,7 @@ const WalletFormComponents = ({ onSubmit, isPending, dataEdit, resetVal, clearEr
             </div>
 
             <button disabled={isPending} className="w-full bg-indigo-600 hover:bg-indigo-700 py-4 rounded-2xl font-bold text-lg transition-all shadow-lg">
-                {Boolean(dataEdit) ? 'Update Wallet' : 'Create Wallet'}
+                {isEditing ? 'Update Wallet' : 'Create Wallet'}
             </button>
         </form>
     )
